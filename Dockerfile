@@ -1,5 +1,22 @@
-# Multi-stage Dockerfile for Python Template Server
-# Stage 1: Backend build stage - build wheel using uv
+# Multi-stage Dockerfile for Cloud Server
+# Stage 1: Frontend build stage - build Next.js static export
+FROM node:25-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+# Copy frontend package files
+COPY cloud-server-frontend/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy frontend source
+COPY cloud-server-frontend/ ./
+
+# Build static export
+RUN npm run build
+
+# Stage 2: Backend build stage - build wheel using uv
 FROM python:3.13-slim AS backend-builder
 
 WORKDIR /build
@@ -11,13 +28,16 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Copy backend source files
-COPY python_template_server/ ./python_template_server/
+COPY cloud_server/ ./cloud_server/
 COPY pyproject.toml .here LICENSE README.md ./
+
+# Copy built frontend from previous stage
+COPY --from=frontend-builder /frontend/out ./static/
 
 # Build the wheel
 RUN uv build --wheel
 
-# Stage 2: Runtime stage
+# Stage 3: Runtime stage
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -43,6 +63,7 @@ RUN mkdir -p /app/logs
 
 # Copy included files from installed wheel to app directory
 RUN SITE_PACKAGES_DIR=$(find /usr/local/lib -name "site-packages" -type d | head -1) && \
+    cp -r "${SITE_PACKAGES_DIR}/static" /app/ && \
     cp "${SITE_PACKAGES_DIR}/.here" /app/.here
 
 # Create startup script
@@ -60,7 +81,7 @@ RUN echo '#!/bin/sh\n\
     export $(grep -v "^#" .env | xargs)\n\
     fi\n\
     \n\
-    exec python-template-server' > /app/start.sh && \
+    exec cloud-server' > /app/start.sh && \
     chmod +x /app/start.sh
 
 # Expose server port

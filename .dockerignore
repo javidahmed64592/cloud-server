@@ -61,6 +61,11 @@ docker-compose.yml
 # Tests
 tests/
 
+# Frontend build artifacts
+cloud-server-frontend/node_modules/
+cloud-server-frontend/.next/
+cloud-server-frontend/out/
+
 # Miscellaneous
 .DS_Store
 *.bak
