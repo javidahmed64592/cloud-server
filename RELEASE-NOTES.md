@@ -1,6 +1,6 @@
-## Python Template Server v{{VERSION}}
+## Cloud Server v{{VERSION}}
 
-**A template FastAPI server with production-ready configuration.**
+**A FastAPI-based local cloud server.**
 
 ### Quick Start
 
