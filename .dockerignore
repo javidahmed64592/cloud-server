@@ -1,0 +1,67 @@
+# Static
+static/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+
+# Documentation
+docs/
+
+# Logs (will be created at runtime)
+logs/
+*.log
+
+# Certs (will be generated at runtime)
+certs/
+
+# Environment files (use docker-compose env instead)
+.env
+.env.*
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Tests
+tests/
+
+# Miscellaneous
+.DS_Store
+*.bak
+*.tmp
