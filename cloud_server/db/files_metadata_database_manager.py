@@ -77,6 +77,11 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
 
     def _add_file_metadata(self, session: Session, file_metadata: FileMetadata) -> FileMetadata:
         """Add a new file metadata entry to the database."""
+        if file_metadata.id is not None:
+            error_msg = f"File metadata ID must be None for new entries: {file_metadata.id}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         db_entry = FileMetadataDB.from_file_metadata(file_metadata=file_metadata)
         session.add(db_entry)
         session.commit()
