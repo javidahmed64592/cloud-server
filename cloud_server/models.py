@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from python_template_server.models import BaseResponse, DatabaseConfig, TemplateServerConfig
 
 
@@ -75,11 +75,15 @@ class FileMetadata(BaseModel):
 class ListFilesResponse(BaseResponse):
     """Response model for getting metadata for all files."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     files_metadata: list[FileMetadata] = Field(..., description="The metadata of all files.", alias="filesMetadata")
 
 
 class UploadFileResponse(BaseResponse):
     """Response model for uploading a file."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     file_metadata: FileMetadata = Field(..., description="The metadata of the uploaded file.", alias="fileMetadata")
 
@@ -87,17 +91,23 @@ class UploadFileResponse(BaseResponse):
 class DeleteFileResponse(BaseResponse):
     """Response model for deleting a file."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     file_metadata: FileMetadata = Field(..., description="The metadata of the deleted file.", alias="fileMetadata")
 
 
 class GetFileMetadataResponse(BaseResponse):
     """Response model for getting file metadata."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     file_metadata: FileMetadata = Field(..., description="The metadata of the retrieved file.", alias="fileMetadata")
 
 
 class UpdateFileMetadataResponse(BaseResponse):
     """Response model for updating file metadata."""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     file_metadata: FileMetadata = Field(..., description="The metadata of the updated file.", alias="fileMetadata")
 
