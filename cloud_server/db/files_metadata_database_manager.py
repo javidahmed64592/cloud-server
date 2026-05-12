@@ -96,7 +96,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         session.refresh(db_entry)
         return db_entry.to_file_metadata()
 
-    def _delete_file_metadata(self, session: Session, file_id: int) -> None:
+    def _delete_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
         """Delete a file metadata entry from the database."""
         if not (db_entry := session.get(FileMetadataDB, file_id)):
             error_msg = f"File for ID not found: {file_id}"
@@ -105,6 +105,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
 
         session.delete(db_entry)
         session.commit()
+        return db_entry.to_file_metadata()
 
     def _get_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
         """Retrieve a file metadata entry from the database."""
@@ -126,17 +127,20 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
             return self._list_files_metadata(session=session)
 
     def perform_file_metadata_action(
-        self, action: DatabaseAction, file_metadata: FileMetadata, file_id: int | None = None
-    ) -> FileMetadata | None:
+        self, action: DatabaseAction, file_metadata: FileMetadata | None = None, file_id: int | None = None
+    ) -> FileMetadata:
         """Perform a database action (create, update, delete) on file metadata."""
         with Session(self.engine) as session:
             match action:
-                case DatabaseAction.CREATE:
+                case DatabaseAction.CREATE if file_metadata is not None:
                     return self._add_file_metadata(session=session, file_metadata=file_metadata)
-                case DatabaseAction.UPDATE if file_id is not None:
+                case DatabaseAction.UPDATE if file_id is not None and file_metadata is not None:
                     return self._update_file_metadata(session=session, file_id=file_id, file_metadata=file_metadata)
                 case DatabaseAction.DELETE if file_id is not None:
-                    self._delete_file_metadata(session=session, file_id=file_id)
-                    return None
+                    return self._delete_file_metadata(session=session, file_id=file_id)
                 case DatabaseAction.GET if file_id is not None:
                     return self._get_file_metadata(session=session, file_id=file_id)
+                case _:
+                    error_msg = f"Missing parameters: action={action}, file_id={file_id}, file_metadata={file_metadata}"
+                    logger.error(error_msg)
+                    raise ValueError(error_msg)
