@@ -65,28 +65,27 @@ class FileMetadata(BaseModel):
         default_factory=current_timestamp_int, description="Unix timestamp when the file was last updated."
     )
 
+    @property
+    def filepath(self) -> Path:
+        """Get the full file path relative to the server storage directory."""
+        return self.parent_directory / self.filename
+
 
 # API Response Models
-class GetFilesMetadataResponse(BaseResponse):
+class ListFilesResponse(BaseResponse):
     """Response model for getting metadata for all files."""
 
     files_metadata: list[FileMetadata] = Field(..., description="The metadata of all files.", alias="filesMetadata")
 
 
-class AddFileMetadataResponse(BaseResponse):
-    """Response model for adding file metadata."""
+class UploadFileResponse(BaseResponse):
+    """Response model for uploading a file."""
 
-    file_metadata: FileMetadata = Field(..., description="The metadata of the added file.", alias="fileMetadata")
-
-
-class UpdateFileMetadataResponse(BaseResponse):
-    """Response model for updating file metadata."""
-
-    file_metadata: FileMetadata = Field(..., description="The metadata of the updated file.", alias="fileMetadata")
+    file_metadata: FileMetadata = Field(..., description="The metadata of the uploaded file.", alias="fileMetadata")
 
 
-class DeleteFileMetadataResponse(BaseResponse):
-    """Response model for deleting file metadata."""
+class DeleteFileResponse(BaseResponse):
+    """Response model for deleting a file."""
 
     file_metadata: FileMetadata = Field(..., description="The metadata of the deleted file.", alias="fileMetadata")
 
@@ -95,3 +94,9 @@ class GetFileMetadataResponse(BaseResponse):
     """Response model for getting file metadata."""
 
     file_metadata: FileMetadata = Field(..., description="The metadata of the retrieved file.", alias="fileMetadata")
+
+
+class UpdateFileMetadataResponse(BaseResponse):
+    """Response model for updating file metadata."""
+
+    file_metadata: FileMetadata = Field(..., description="The metadata of the updated file.", alias="fileMetadata")
