@@ -1,16 +1,19 @@
 {
   "security": {
     "hsts_max_age": 31536000,
-    "content_security_policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://cdn.jsdelivr.net https://fastapi.tiangolo.com"
+    "content_security_policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn.jsdelivr.net https://fastapi.tiangolo.com; media-src 'self' blob:"
   },
   "cors": {
-    "enabled": false,
+    "enabled": true,
     "allow_origins": [
       "*"
     ],
     "allow_credentials": true,
     "allow_methods": [
-      "GET"
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE"
     ],
     "allow_headers": [
       "Content-Type",
@@ -35,5 +38,13 @@
     "allow_nan": false,
     "indent": null,
     "media_type": "application/json; charset=utf-8"
+  },
+  "db": {
+    "db_directory": "data",
+    "files_metadata_db_filename": "files_metadata.db"
+  },
+  "storage_config": {
+    "upload_chunk_size_kb": 8,
+    "max_file_size_mb": 100
   }
 }
