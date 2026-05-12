@@ -1,6 +1,6 @@
 services:
   cloud-server:
-    image: ${IMAGE:-ghcr.io/javidahmed64592/cloud-server:latest}
+    # image: ${IMAGE:-ghcr.io/javidahmed64592/cloud-server:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -15,6 +15,7 @@ services:
       - ./.env:/app/.env
       - ./certs:/app/certs
       - ./logs:/app/logs
+      - ./data:/app/data
       - ${SERVER_PATH:-./server}:/app/server
     restart: unless-stopped
     healthcheck:
