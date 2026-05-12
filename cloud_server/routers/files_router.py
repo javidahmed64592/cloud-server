@@ -11,7 +11,7 @@ from cloud_server.models import (
     DatabaseAction,
     DeleteFileMetadataResponse,
     GetFileMetadataResponse,
-    GetFilesMetadataResponse,
+    StorageConfig,
     UpdateFileMetadataResponse,
 )
 
@@ -19,10 +19,13 @@ from cloud_server.models import (
 class FilesRouter(BaseRouter):
     """Router for the cloud server file operations."""
 
-    def configure_router(self, db: FilesMetadataDatabaseManager, storage_directory: Path) -> None:
+    def configure_router(
+        self, db: FilesMetadataDatabaseManager, storage_directory: Path, storage_config: StorageConfig
+    ) -> None:
         """Configure the router with necessary dependencies."""
         self._db = db
         self._storage_directory = storage_directory
+        self._storage_config = storage_config
 
     def setup_routes(self) -> None:
         """Set up the API routes."""

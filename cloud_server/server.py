@@ -56,7 +56,11 @@ class CloudServer(TemplateServer):
 
         :return list[BaseRouter]: List of API routers
         """
-        FILES_ROUTER.configure_router(db=self.files_metadata_database_manager, storage_directory=self.storage_directory)
+        FILES_ROUTER.configure_router(
+            db=self.files_metadata_database_manager,
+            storage_directory=self.storage_directory,
+            storage_config=self.config.storage_config,
+        )
         return [FILES_ROUTER]
 
     def validate_config(self, config_data: dict) -> CloudServerConfig:
