@@ -1,6 +1,7 @@
 """Files metadata database manager."""
 
 import logging
+import mimetypes
 from pathlib import Path
 
 from python_template_server.db import BaseDatabaseManager
@@ -149,3 +150,42 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
                     error_msg = f"Missing parameters: action={action}, file_id={file_id}, file_metadata={file_metadata}"
                     logger.error(error_msg)
                     raise ValueError(error_msg)
+
+    def synchronize_with_storage(self, storage_directory: Path) -> None:
+        """Synchronize the files metadata database with the actual files in the storage directory.
+
+        This method ensures that the database entries accurately reflect the files present in the storage directory.
+        It adds metadata for new files, updates metadata for existing files, and removes metadata for deleted files.
+
+        :param Path storage_directory: The path to the storage directory to synchronize with
+        """
+        existing_metadata = {metadata.filepath: metadata for metadata in self.list_files()}
+
+        # Walk through all files in the storage directory
+        for filepath in storage_directory.rglob("*"):
+            if filepath.is_file():
+                relative_path = filepath.relative_to(storage_directory)
+                filename = relative_path.name
+                parent_directory = relative_path.parent
+                mime_type, _ = mimetypes.guess_type(filepath)
+                size = filepath.stat().st_size
+
+                file_metadata = FileMetadata(
+                    filename=filename,
+                    parent_directory=parent_directory,
+                    mime_type=mime_type or "application/octet-stream",
+                    size=size,
+                )
+
+                if (filepath := file_metadata.filepath) in existing_metadata:
+                    del existing_metadata[filepath]
+                    continue
+
+                # Add new metadata entry for new file
+                logger.info("Adding new metadata for file: %s", file_metadata.filepath)
+                self.perform_file_metadata_action(action=DatabaseAction.CREATE, file_metadata=file_metadata)
+
+        # Remove metadata entries for files that no longer exist in storage
+        for remaining_entry in existing_metadata.values():
+            logger.warning("Removing metadata for deleted file: %s", remaining_entry.filepath)
+            self.perform_file_metadata_action(action=DatabaseAction.DELETE, file_id=remaining_entry.id)

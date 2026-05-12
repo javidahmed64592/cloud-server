@@ -38,7 +38,13 @@ class CloudServer(TemplateServer):
         logger.info("Creating storage directory: %s", self.storage_directory)
         self.storage_directory.mkdir(parents=True, exist_ok=True)
 
+        logger.info("Configuring databases...")
         self.files_metadata_database_manager.configure(db_config=self.config.db)
+
+        logger.info("Synchronizing files metadata database with storage directory...")
+        self.files_metadata_database_manager.synchronize_with_storage(storage_directory=self.storage_directory)
+        files_metadata = self.files_metadata_database_manager.list_files()
+        logger.info("Synchronized %d files metadata entries with storage directory.", len(files_metadata))
 
     @property
     def server_directory(self) -> Path:
