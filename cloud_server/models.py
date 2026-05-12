@@ -116,5 +116,9 @@ class UpdateFileMetadataResponse(BaseResponse):
 class UpdateFileMetadataRequest(BaseModel):
     """Request model for updating file metadata."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     filename: str = Field(..., description="New filename for the file.")
-    parent_directory: Path = Field(..., description="New parent directory path relative to server storage directory.")
+    parent_directory: Path = Field(
+        ..., description="New parent directory path relative to server storage directory.", alias="parentDirectory"
+    )
