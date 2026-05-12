@@ -21,6 +21,7 @@ dependencies = [
     "pillow>=12.2.0",
     "python-template-server @ git+https://github.com/javidahmed64592/python-template-server.git",
     "opencv-python-headless>=4.13.0",
+    "aiofiles>=25.1.0",
 ]
 
 [project.optional-dependencies]
