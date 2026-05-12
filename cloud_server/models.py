@@ -100,3 +100,11 @@ class UpdateFileMetadataResponse(BaseResponse):
     """Response model for updating file metadata."""
 
     file_metadata: FileMetadata = Field(..., description="The metadata of the updated file.", alias="fileMetadata")
+
+
+# API Request Models
+class UpdateFileMetadataRequest(BaseModel):
+    """Request model for updating file metadata."""
+
+    filename: str = Field(..., description="New filename for the file.")
+    parent_directory: Path = Field(..., description="New parent directory path relative to server storage directory.")
