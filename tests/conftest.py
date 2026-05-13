@@ -128,7 +128,12 @@ def mock_limiter() -> Limiter:
 
 
 @pytest.fixture
-def mock_files_router(mock_limiter: Limiter) -> FilesRouter:
+def mock_files_router(
+    mock_limiter: Limiter,
+    mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
+    mock_tmp_storage_path: Path,
+    mock_storage_config: StorageConfig,
+) -> FilesRouter:
     """Provide a FilesRouter instance for testing."""
     FILES_ROUTER.configure(
         hashed_token="hashed_value",  # noqa: S106
@@ -136,4 +141,9 @@ def mock_files_router(mock_limiter: Limiter) -> FilesRouter:
         rate_limit="10/minute",
     )
     FILES_ROUTER.setup_routes()
+    FILES_ROUTER.configure_router(
+        db=mock_files_metadata_database_manager,
+        storage_directory=mock_tmp_storage_path,
+        storage_config=mock_storage_config,
+    )
     return FILES_ROUTER
