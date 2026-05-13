@@ -2,7 +2,8 @@
 
 from collections.abc import Generator
 from importlib.metadata import PackageMetadata
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
@@ -32,12 +33,16 @@ def mock_server(
     mock_cloud_server_config: CloudServerConfig,
     mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
     mock_files_router: FilesRouter,
+    mock_tmp_server_path: Path,
+    mock_tmp_storage_path: Path,
 ) -> Generator[CloudServer]:
     """Provide a CloudServer instance for testing."""
     with (
         patch("cloud_server.server.CloudServerConfig.save_to_file"),
         patch("cloud_server.server.FilesMetadataDatabaseManager", return_value=mock_files_metadata_database_manager),
         patch("cloud_server.server.FilesRouter", return_value=mock_files_router),
+        patch.object(CloudServer, "server_directory", new_callable=PropertyMock, return_value=mock_tmp_server_path),
+        patch.object(CloudServer, "storage_directory", new_callable=PropertyMock, return_value=mock_tmp_storage_path),
     ):
         server = CloudServer(config=mock_cloud_server_config)
         yield server
