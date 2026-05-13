@@ -76,7 +76,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         """Get the database URL."""
         return self.db_config.db_url(self.db_config.files_metadata_db_filename)  # type: ignore[no-any-return]
 
-    def _add_file_metadata(self, session: Session, file_metadata: FileMetadata) -> FileMetadata:
+    def _create_file_metadata(self, session: Session, file_metadata: FileMetadata) -> FileMetadata:
         """Add a new file metadata entry to the database."""
         if file_metadata.id is not None:
             error_msg = f"File metadata ID must be None for new entries: {file_metadata.id}"
@@ -87,6 +87,15 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         session.add(db_entry)
         session.commit()
         session.refresh(db_entry)
+        return db_entry.to_file_metadata()
+
+    def _read_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
+        """Retrieve a file metadata entry from the database."""
+        if not (db_entry := session.get(FileMetadataDB, file_id)):
+            error_msg = f"File for ID not found: {file_id}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
         return db_entry.to_file_metadata()
 
     def _update_file_metadata(self, session: Session, file_id: int, file_metadata: FileMetadata) -> FileMetadata:
@@ -113,15 +122,6 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         session.commit()
         return db_entry.to_file_metadata()
 
-    def _get_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
-        """Retrieve a file metadata entry from the database."""
-        if not (db_entry := session.get(FileMetadataDB, file_id)):
-            error_msg = f"File for ID not found: {file_id}"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        return db_entry.to_file_metadata()
-
     def _list_files_metadata(self, session: Session) -> list[FileMetadata]:
         """List all file metadata entries in the database."""
         db_entries = session.exec(select(FileMetadataDB)).all()
@@ -139,9 +139,9 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         with Session(self.engine) as session:
             match action:
                 case DatabaseAction.CREATE if file_metadata is not None:
-                    return self._add_file_metadata(session=session, file_metadata=file_metadata)
+                    return self._create_file_metadata(session=session, file_metadata=file_metadata)
                 case DatabaseAction.READ if file_id is not None:
-                    return self._get_file_metadata(session=session, file_id=file_id)
+                    return self._read_file_metadata(session=session, file_id=file_id)
                 case DatabaseAction.UPDATE if file_id is not None and file_metadata is not None:
                     return self._update_file_metadata(session=session, file_id=file_id, file_metadata=file_metadata)
                 case DatabaseAction.DELETE if file_id is not None:
