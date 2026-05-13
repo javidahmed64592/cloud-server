@@ -159,9 +159,12 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
 
         :param Path storage_directory: The path to the storage directory to synchronize with
         """
+        if not any(storage_directory.iterdir()):
+            logger.warning("Storage directory is empty, skipping synchronization: %s", storage_directory)
+            return
+
         existing_metadata = {metadata.filepath: metadata for metadata in self.list_files()}
 
-        # Walk through all files in the storage directory
         for filepath in storage_directory.rglob("*"):
             if filepath.is_file():
                 relative_path = filepath.relative_to(storage_directory)
@@ -181,11 +184,9 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
                     del existing_metadata[filepath]
                     continue
 
-                # Add new metadata entry for new file
                 logger.info("Adding new metadata for file: %s", file_metadata.filepath)
                 self.perform_file_metadata_action(action=DatabaseAction.CREATE, file_metadata=file_metadata)
 
-        # Remove metadata entries for files that no longer exist in storage
         for remaining_entry in existing_metadata.values():
             logger.warning("Removing metadata for deleted file: %s", remaining_entry.filepath)
             self.perform_file_metadata_action(action=DatabaseAction.DELETE, file_id=remaining_entry.id)
