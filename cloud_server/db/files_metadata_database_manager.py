@@ -135,17 +135,17 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
     def perform_file_metadata_action(
         self, action: DatabaseAction, file_metadata: FileMetadata | None = None, file_id: int | None = None
     ) -> FileMetadata:
-        """Perform a database action (create, update, delete) on file metadata."""
+        """Perform a database action (CRUD) on file metadata."""
         with Session(self.engine) as session:
             match action:
                 case DatabaseAction.CREATE if file_metadata is not None:
                     return self._add_file_metadata(session=session, file_metadata=file_metadata)
+                case DatabaseAction.READ if file_id is not None:
+                    return self._get_file_metadata(session=session, file_id=file_id)
                 case DatabaseAction.UPDATE if file_id is not None and file_metadata is not None:
                     return self._update_file_metadata(session=session, file_id=file_id, file_metadata=file_metadata)
                 case DatabaseAction.DELETE if file_id is not None:
                     return self._delete_file_metadata(session=session, file_id=file_id)
-                case DatabaseAction.GET if file_id is not None:
-                    return self._get_file_metadata(session=session, file_id=file_id)
                 case _:
                     error_msg = f"Missing parameters: action={action}, file_id={file_id}, file_metadata={file_metadata}"
                     logger.error(error_msg)

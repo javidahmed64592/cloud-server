@@ -187,7 +187,7 @@ class FilesRouter(BaseRouter):
         """
         # Retrieve file metadata from database
         try:
-            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.GET, file_id=file_id)
+            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
             error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
             logger.exception(error_msg)
@@ -243,7 +243,7 @@ class FilesRouter(BaseRouter):
         """
         # Retrieve file metadata from database
         try:
-            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.GET, file_id=file_id)
+            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
             error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
             logger.exception(error_msg)
@@ -267,7 +267,7 @@ class FilesRouter(BaseRouter):
         """
         # Retrieve existing metadata to get current filename and parent directory
         try:
-            old_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.GET, file_id=file_id)
+            old_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
             error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
             logger.exception(error_msg)

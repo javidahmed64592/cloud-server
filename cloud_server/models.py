@@ -44,9 +44,9 @@ class DatabaseAction(StrEnum):
     """Enumeration for database actions."""
 
     CREATE = "create"
+    READ = "read"
     UPDATE = "update"
     DELETE = "delete"
-    GET = "get"
 
 
 # File Models
