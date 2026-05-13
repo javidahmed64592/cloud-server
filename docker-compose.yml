@@ -16,7 +16,7 @@ services:
       - ./certs:/app/certs
       - ./logs:/app/logs
       - ./data:/app/data
-      - ${SERVER_PATH:-./server}:/app/server
+      - ${SERVER_DIRECTORY:-./server}:/app/server
     restart: unless-stopped
     healthcheck:
       test: [
