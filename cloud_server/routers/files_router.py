@@ -276,8 +276,8 @@ class FilesRouter(BaseRouter):
         # Construct new metadata with updated filename and parent directory
         new_metadata = FileMetadata(
             id=file_id,
-            filename=body.filename,
-            parent_directory=body.parent_directory,
+            filename=body.filename or old_metadata.filename,
+            parent_directory=body.parent_directory or old_metadata.parent_directory,
             mime_type=old_metadata.mime_type,
             size=old_metadata.size,
         )
