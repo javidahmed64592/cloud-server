@@ -22,12 +22,6 @@ from cloud_server.server import FILES_ROUTER
 
 # General fixtures
 @pytest.fixture
-def mock_tmp_config_path(tmp_path: Path) -> Path:
-    """Provide a temporary config file path."""
-    return tmp_path / "config.json"
-
-
-@pytest.fixture
 def mock_tmp_db_path(tmp_path: Path) -> Path:
     """Provide a temporary database directory path."""
     return tmp_path / "data"
@@ -93,10 +87,13 @@ def mock_cloud_server_config(
 def mock_files_metadata_database_manager(
     mock_db_config: ServerDatabaseConfig,
     mock_file_metadata: FileMetadata,
+    mock_tmp_storage_path: Path,
 ) -> Generator[FilesMetadataDatabaseManager]:
     """Provide a FilesMetadataDatabaseManager instance for testing."""
-    mock_file_metadata.parent_directory.mkdir(parents=True, exist_ok=True)
-    mock_file_metadata.filepath.write_text("Test file content")
+    # Create the actual file in storage (using absolute path)
+    file_path = mock_tmp_storage_path / mock_file_metadata.parent_directory / mock_file_metadata.filename
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text("Test file content")
 
     db_manager = FilesMetadataDatabaseManager()
     db_manager.configure(db_config=mock_db_config)
@@ -115,7 +112,7 @@ def mock_file_metadata(mock_tmp_storage_path: Path) -> FileMetadata:
     return FileMetadata(
         id=None,
         filename="test_file.txt",
-        parent_directory=mock_tmp_storage_path,
+        parent_directory=Path("."),  # Relative path as per database schema
         mime_type="text/plain",
         size=1024,
     )

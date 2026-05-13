@@ -51,17 +51,16 @@ def mock_server(
 class TestCloudServer:
     """Unit tests for the CloudServer class."""
 
-    def test_init(
-        self,
-        mock_server: CloudServer,
-        mock_files_router: FilesRouter,
-    ) -> None:
+    def test_init(self, mock_server: CloudServer, mock_files_router: FilesRouter) -> None:
         """Test CloudServer initialization."""
         assert isinstance(mock_server.config, CloudServerConfig)
         for route in [
             *mock_files_router.router.routes,
         ]:
             assert route in mock_server.app.routes
+        assert isinstance(mock_server.files_metadata_database_manager, FilesMetadataDatabaseManager)
+        assert mock_server.server_directory.exists()
+        assert mock_server.storage_directory.exists()
 
     def test_validate_config(self, mock_server: CloudServer, mock_cloud_server_config: CloudServerConfig) -> None:
         """Test configuration validation."""
