@@ -67,7 +67,7 @@ def mock_storage_config_dict() -> dict:
 @pytest.fixture
 def mock_db_config(mock_db_config_dict: dict) -> ServerDatabaseConfig:
     """Provide a mock ServerDatabaseConfig instance."""
-    return ServerDatabaseConfig.model_validate(mock_db_config_dict)
+    return ServerDatabaseConfig.model_validate(mock_db_config_dict)  # type: ignore[no-any-return]
 
 
 @pytest.fixture
@@ -92,13 +92,18 @@ def mock_cloud_server_config(
 @pytest.fixture
 def mock_files_metadata_database_manager(
     mock_db_config: ServerDatabaseConfig,
+    mock_file_metadata: FileMetadata,
 ) -> Generator[FilesMetadataDatabaseManager]:
     """Provide a FilesMetadataDatabaseManager instance for testing."""
+    mock_file_metadata.parent_directory.mkdir(parents=True, exist_ok=True)
+    mock_file_metadata.filepath.write_text("Test file content")
+
     db_manager = FilesMetadataDatabaseManager()
     db_manager.configure(db_config=mock_db_config)
     pooled_engine = db_manager.engine
     db_manager.engine = create_engine(pooled_engine.url, poolclass=NullPool)
     pooled_engine.dispose()
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_file_metadata)
     yield db_manager
     db_manager.engine.dispose()
 

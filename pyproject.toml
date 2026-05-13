@@ -170,6 +170,7 @@ pretty = true
 
 [[tool.mypy.overrides]]
 module = [
+    "aiofiles.*",
     "python_template_server.*",
     "template_python.*",
 ]
