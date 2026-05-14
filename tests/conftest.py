@@ -90,7 +90,6 @@ def mock_files_metadata_database_manager(
     mock_tmp_storage_path: Path,
 ) -> Generator[FilesMetadataDatabaseManager]:
     """Provide a FilesMetadataDatabaseManager instance for testing."""
-    # Create the actual file in storage (using absolute path)
     file_path = mock_tmp_storage_path / mock_file_metadata.parent_directory / mock_file_metadata.filename
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text("Test file content")
@@ -107,12 +106,12 @@ def mock_files_metadata_database_manager(
 
 # File Models
 @pytest.fixture
-def mock_file_metadata(mock_tmp_storage_path: Path) -> FileMetadata:
+def mock_file_metadata() -> FileMetadata:
     """Provide a mock FileMetadata instance."""
     return FileMetadata(
         id=None,
         filename="test_file.txt",
-        parent_directory=Path("."),  # Relative path as per database schema
+        parent_directory=Path("."),
         mime_type="text/plain",
         size=1024,
     )
