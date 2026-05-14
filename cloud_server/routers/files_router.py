@@ -189,13 +189,13 @@ class FilesRouter(BaseRouter):
         try:
             file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
         # Validate file exists in storage
         if not (filepath := self._storage_directory / file_metadata.filepath).exists():
-            error_msg = f"File not found in storage for file ID: {file_id}, expected at: {filepath}"
+            error_msg = f"File {file_id} not found in storage: {filepath}"
             logger.error(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
@@ -217,13 +217,13 @@ class FilesRouter(BaseRouter):
         try:
             file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.DELETE, file_id=file_id)
         except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
         # Validate file exists in storage before attempting to delete
         if not (filepath := self._storage_directory / file_metadata.filepath).exists():
-            error_msg = f"File not found in storage for file ID: {file_id}, expected at: {filepath}"
+            error_msg = f"File {file_id} not found in storage: {filepath}"
             logger.error(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
@@ -245,7 +245,7 @@ class FilesRouter(BaseRouter):
         try:
             file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
@@ -269,7 +269,7 @@ class FilesRouter(BaseRouter):
         try:
             old_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
         except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
@@ -288,7 +288,7 @@ class FilesRouter(BaseRouter):
                 action=DatabaseAction.UPDATE, file_id=file_id, file_metadata=new_metadata
             )
         except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file ID: {file_id}"
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
@@ -298,12 +298,12 @@ class FilesRouter(BaseRouter):
             new_filepath = self._storage_directory / updated_file_metadata.filepath
 
             if not old_filepath.exists():
-                error_msg = f"File not found in storage for file ID: {file_id}, expected at: {old_filepath}"
+                error_msg = f"File {file_id} not found in storage: {old_filepath}"
                 logger.error(error_msg)
                 raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
             if new_filepath.exists():
-                error_msg = f"File already exists in storage: {new_filepath}"
+                error_msg = f"File {file_id} already exists in storage: {new_filepath}"
                 logger.error(error_msg)
                 raise HTTPException(status_code=ResponseCode.CONFLICT, detail=error_msg)
 
