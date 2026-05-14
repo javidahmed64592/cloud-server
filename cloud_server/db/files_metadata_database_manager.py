@@ -79,7 +79,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
     def _create_file_metadata(self, session: Session, file_metadata: FileMetadata) -> FileMetadata:
         """Add a new file metadata entry to the database."""
         if file_metadata.id is not None:
-            error_msg = f"File metadata ID must be None for new entries: {file_metadata.id}"
+            error_msg = f"File metadata ID must be None for new entries, got ID {file_metadata.id}!"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -92,7 +92,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
     def _read_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
         """Retrieve a file metadata entry from the database."""
         if not (db_entry := session.get(FileMetadataDB, file_id)):
-            error_msg = f"File for ID not found: {file_id}"
+            error_msg = f"File {file_id} not found!"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -101,7 +101,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
     def _update_file_metadata(self, session: Session, file_id: int, file_metadata: FileMetadata) -> FileMetadata:
         """Update an existing file metadata entry in the database."""
         if not (db_entry := session.get(FileMetadataDB, file_id)):
-            error_msg = f"File for ID not found: {file_id}"
+            error_msg = f"File {file_id} not found!"
             logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -114,7 +114,7 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
     def _delete_file_metadata(self, session: Session, file_id: int) -> FileMetadata:
         """Delete a file metadata entry from the database."""
         if not (db_entry := session.get(FileMetadataDB, file_id)):
-            error_msg = f"File for ID not found: {file_id}"
+            error_msg = f"File {file_id} not found!"
             logger.error(error_msg)
             raise ValueError(error_msg)
 

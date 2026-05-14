@@ -32,7 +32,9 @@ class TestFilesMetadataDatabaseManager:
     ) -> None:
         """Test adding file metadata with an ID raises an error."""
         mock_file_metadata.id = 1
-        with pytest.raises(ValueError, match=f"File metadata ID must be None for new entries: {mock_file_metadata.id}"):
+        with pytest.raises(
+            ValueError, match=f"File metadata ID must be None for new entries, got ID {mock_file_metadata.id}!"
+        ):
             mock_files_metadata_database_manager._create_file_metadata(
                 session=mock_session, file_metadata=mock_file_metadata
             )
@@ -42,7 +44,7 @@ class TestFilesMetadataDatabaseManager:
     ) -> None:
         """Test reading file metadata for a non-existent ID raises an error."""
         mock_session.get.return_value = None
-        with pytest.raises(ValueError, match="File for ID not found: 999"):
+        with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._read_file_metadata(session=mock_session, file_id=999)
 
     def test_update_nonexistent_file_metadata(
@@ -50,7 +52,7 @@ class TestFilesMetadataDatabaseManager:
     ) -> None:
         """Test updating file metadata for a non-existent ID raises an error."""
         mock_session.get.return_value = None
-        with pytest.raises(ValueError, match="File for ID not found: 999"):
+        with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._update_file_metadata(
                 session=mock_session, file_id=999, file_metadata=MagicMock(spec=FileMetadata)
             )
@@ -60,7 +62,7 @@ class TestFilesMetadataDatabaseManager:
     ) -> None:
         """Test deleting file metadata for a non-existent ID raises an error."""
         mock_session.get.return_value = None
-        with pytest.raises(ValueError, match="File for ID not found: 999"):
+        with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._delete_file_metadata(session=mock_session, file_id=999)
 
     def test_list_files(self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager) -> None:
