@@ -18,6 +18,7 @@ from cloud_server.models import (
 )
 from cloud_server.routers.files_router import FilesRouter
 from cloud_server.server import FILES_ROUTER
+from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 
 # General fixtures
@@ -37,6 +38,12 @@ def mock_tmp_server_path(tmp_path: Path) -> Path:
 def mock_tmp_storage_path(mock_tmp_server_path: Path) -> Path:
     """Provide a temporary storage directory path."""
     return mock_tmp_server_path / "storage"
+
+
+@pytest.fixture
+def mock_tmp_thumbnails_path(mock_tmp_storage_path: Path) -> Path:
+    """Provide a temporary thumbnails directory path."""
+    return mock_tmp_storage_path / ".thumbnails"
 
 
 # Cloud Server Configuration Models
@@ -118,6 +125,13 @@ def mock_file_metadata() -> FileMetadata:
     )
 
 
+# Thumbnail fixtures
+@pytest.fixture
+def mock_thumbnail_generator(mock_tmp_thumbnails_path: Path) -> ThumbnailGenerator:
+    """Provide a ThumbnailGenerator instance for testing."""
+    return ThumbnailGenerator(thumbnails_directory=mock_tmp_thumbnails_path)
+
+
 # Server fixtures
 @pytest.fixture(autouse=True)
 def mock_limiter() -> Limiter:
@@ -133,6 +147,7 @@ def mock_files_router(
     mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
     mock_tmp_storage_path: Path,
     mock_storage_config: StorageConfig,
+    mock_thumbnail_generator: ThumbnailGenerator,
 ) -> FilesRouter:
     """Provide a FilesRouter instance for testing."""
     FILES_ROUTER.configure(
@@ -145,5 +160,6 @@ def mock_files_router(
         db=mock_files_metadata_database_manager,
         storage_directory=mock_tmp_storage_path,
         storage_config=mock_storage_config,
+        thumbnail_generator=mock_thumbnail_generator,
     )
     return FILES_ROUTER

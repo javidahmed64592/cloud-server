@@ -4,11 +4,13 @@ import logging
 from pathlib import Path
 
 from python_template_server.constants import ROOT_DIR
-from python_template_server.template_server import BaseRouter, TemplateServer
+from python_template_server.routers import BaseRouter
+from python_template_server.template_server import TemplateServer
 
 from cloud_server.db import FilesMetadataDatabaseManager
 from cloud_server.models import CloudServerConfig
 from cloud_server.routers import FilesRouter
+from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ class CloudServer(TemplateServer):
         :param CloudServerConfig | None config: Optional pre-loaded configuration
         """
         self.files_metadata_database_manager = FilesMetadataDatabaseManager()
+        self.thumbnail_generator = ThumbnailGenerator(thumbnails_directory=self.thumbnails_directory)
 
         self.config: CloudServerConfig
         super().__init__(
@@ -40,11 +43,17 @@ class CloudServer(TemplateServer):
 
         logger.info("Configuring databases...")
         self.files_metadata_database_manager.configure(db_config=self.config.db)
-
-        logger.info("Synchronizing files metadata database with storage directory...")
         self.files_metadata_database_manager.synchronize_with_storage(storage_directory=self.storage_directory)
+
         files_metadata = self.files_metadata_database_manager.list_files()
         logger.info("Synchronized %d files metadata entries with storage directory.", len(files_metadata))
+
+        logger.info("Synchronizing thumbnails with storage directory...")
+        self.thumbnail_generator.synchronize_with_storage(
+            storage_directory=self.storage_directory,
+            files_metadata=files_metadata,
+            thumbnail_size=self.config.storage_config.thumbnail_size,
+        )
 
     @property
     def server_directory(self) -> Path:
@@ -57,6 +66,11 @@ class CloudServer(TemplateServer):
         return self.server_directory / "storage"
 
     @property
+    def thumbnails_directory(self) -> Path:
+        """Get the thumbnails directory path."""
+        return self.storage_directory / ".thumbnails"
+
+    @property
     def routers(self) -> list[BaseRouter]:
         """Define the API routers for the server.
 
@@ -66,6 +80,7 @@ class CloudServer(TemplateServer):
             db=self.files_metadata_database_manager,
             storage_directory=self.storage_directory,
             storage_config=self.config.storage_config,
+            thumbnail_generator=self.thumbnail_generator,
         )
         return [FILES_ROUTER]
 

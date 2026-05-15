@@ -168,6 +168,13 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         for filepath in storage_directory.rglob("*"):
             if filepath.is_file():
                 relative_path = filepath.relative_to(storage_directory)
+                if relative_path.parts[0] == ".thumbnails":
+                    continue
+
+                if relative_path in existing_metadata.keys():
+                    del existing_metadata[relative_path]
+                    continue
+
                 filename = relative_path.name
                 parent_directory = relative_path.parent
                 mime_type, _ = mimetypes.guess_type(filepath)
@@ -179,10 +186,6 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
                     mime_type=mime_type or "application/octet-stream",
                     size=size,
                 )
-
-                if (filepath := file_metadata.filepath) in existing_metadata:
-                    del existing_metadata[filepath]
-                    continue
 
                 logger.info("Adding new metadata for file: %s", file_metadata.filepath)
                 self.perform_file_metadata_action(action=DatabaseAction.CREATE, file_metadata=file_metadata)
