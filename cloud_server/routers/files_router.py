@@ -15,13 +15,13 @@ from cloud_server.models import (
     DatabaseAction,
     DeleteFileResponse,
     FileMetadata,
-    GetFileMetadataResponse,
     ListFilesResponse,
     StorageConfig,
     UpdateFileMetadataRequest,
     UpdateFileMetadataResponse,
     UploadFileResponse,
 )
+from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,17 @@ class FilesRouter(BaseRouter):
     """Router for the cloud server file operations."""
 
     def configure_router(
-        self, db: FilesMetadataDatabaseManager, storage_directory: Path, storage_config: StorageConfig
+        self,
+        db: FilesMetadataDatabaseManager,
+        storage_directory: Path,
+        storage_config: StorageConfig,
+        thumbnail_generator: ThumbnailGenerator,
     ) -> None:
         """Configure the router with necessary dependencies."""
         self._db = db
         self._storage_directory = storage_directory
         self._storage_config = storage_config
+        self._thumbnail_generator = thumbnail_generator
 
     def setup_routes(self) -> None:
         """Set up the API routes."""
@@ -68,14 +73,6 @@ class FilesRouter(BaseRouter):
             handler_function=self.delete_file,
             response_model=DeleteFileResponse,
             methods=["DELETE"],
-            limited=True,
-            authentication_required=True,
-        )
-        self.add_route(
-            endpoint="/{file_id}/metadata",
-            handler_function=self.get_file_metadata,
-            response_model=GetFileMetadataResponse,
-            methods=["GET"],
             limited=True,
             authentication_required=True,
         )
@@ -230,27 +227,6 @@ class FilesRouter(BaseRouter):
         filepath.unlink()
         return DeleteFileResponse(
             message="File deleted successfully.",
-            file_metadata=file_metadata,
-        )
-
-    async def get_file_metadata(self, request: Request, file_id: int) -> GetFileMetadataResponse:
-        """Get metadata for a file by its ID.
-
-        :param Request request: The incoming HTTP request
-        :param int file_id: The ID of the file to retrieve metadata for
-        :return GetFileMetadataResponse: File metadata response
-        :raises HTTPException: If the file metadata doesn't exist in the database
-        """
-        # Retrieve file metadata from database
-        try:
-            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
-        except ValueError as e:
-            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
-            logger.exception(error_msg)
-            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
-
-        return GetFileMetadataResponse(
-            message="File metadata retrieved successfully.",
             file_metadata=file_metadata,
         )
 

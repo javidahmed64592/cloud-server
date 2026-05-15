@@ -97,14 +97,6 @@ class DeleteFileResponse(BaseResponse):
     file_metadata: FileMetadata = Field(..., description="The metadata of the deleted file.", alias="fileMetadata")
 
 
-class GetFileMetadataResponse(BaseResponse):
-    """Response model for getting file metadata."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    file_metadata: FileMetadata = Field(..., description="The metadata of the retrieved file.", alias="fileMetadata")
-
-
 class UpdateFileMetadataResponse(BaseResponse):
     """Response model for updating file metadata."""
 

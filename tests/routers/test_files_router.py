@@ -112,26 +112,6 @@ class TestDeleteFileEndpoint:
         assert len(mock_files_router._db.list_files()) == 0
 
 
-class TestGetFileMetadataEndpoint:
-    """Integration tests for the /files/{file_id}/metadata endpoint."""
-
-    @pytest.fixture
-    def mock_request_object(self) -> Request:
-        """Provide a mock Request object."""
-        return MagicMock(spec=Request)
-
-    def test_get_file_metadata(
-        self, mock_files_router: FilesRouter, mock_request_object: Request, mock_file_metadata: FileMetadata
-    ) -> None:
-        """Test the /files/{file_id}/metadata endpoint method."""
-        file_id = mock_files_router._db.list_files()[0].id
-
-        response = asyncio.run(mock_files_router.get_file_metadata(mock_request_object, file_id))
-
-        assert response.message == "File metadata retrieved successfully."
-        assert response.file_metadata.filepath == mock_file_metadata.filepath
-
-
 class TestUpdateFileMetadataEndpoint:
     """Integration tests for the /files/{file_id}/metadata endpoint."""
 
