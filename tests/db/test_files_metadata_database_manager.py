@@ -43,7 +43,7 @@ class TestFilesMetadataDatabaseManager:
         self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager, mock_session: Session
     ) -> None:
         """Test reading file metadata for a non-existent ID raises an error."""
-        mock_session.get.return_value = None
+        mock_session.get.return_value = None  # type: ignore[attr-defined]
         with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._read_file_metadata(session=mock_session, file_id=999)
 
@@ -51,7 +51,7 @@ class TestFilesMetadataDatabaseManager:
         self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager, mock_session: Session
     ) -> None:
         """Test updating file metadata for a non-existent ID raises an error."""
-        mock_session.get.return_value = None
+        mock_session.get.return_value = None  # type: ignore[attr-defined]
         with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._update_file_metadata(
                 session=mock_session, file_id=999, file_metadata=MagicMock(spec=FileMetadata)
@@ -61,7 +61,7 @@ class TestFilesMetadataDatabaseManager:
         self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager, mock_session: Session
     ) -> None:
         """Test deleting file metadata for a non-existent ID raises an error."""
-        mock_session.get.return_value = None
+        mock_session.get.return_value = None  # type: ignore[attr-defined]
         with pytest.raises(ValueError, match="File 999 not found!"):
             mock_files_metadata_database_manager._delete_file_metadata(session=mock_session, file_id=999)
 

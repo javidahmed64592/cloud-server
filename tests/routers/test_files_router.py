@@ -61,7 +61,7 @@ class TestUploadFileEndpoint:
         mock_file.read.return_value = b"Test file content"
 
         response = asyncio.run(
-            mock_files_router.upload_file(mock_request_object, mock_file, mock_file_metadata.parent_directory)
+            mock_files_router.upload_file(mock_request_object, mock_file, str(mock_file_metadata.parent_directory))
         )
 
         assert response.message == "File uploaded successfully."
@@ -83,6 +83,7 @@ class TestGetFileEndpoint:
     ) -> None:
         """Test the /files/{file_id} endpoint method."""
         file_id = mock_files_router._db.list_files()[0].id
+        assert file_id is not None
 
         response = asyncio.run(mock_files_router.get_file(mock_request_object, file_id))
 
@@ -104,6 +105,7 @@ class TestDeleteFileEndpoint:
     ) -> None:
         """Test the /files/{file_id} endpoint method."""
         file_id = mock_files_router._db.list_files()[0].id
+        assert file_id is not None
 
         response = asyncio.run(mock_files_router.delete_file(mock_request_object, file_id))
 
@@ -125,9 +127,11 @@ class TestUpdateFileMetadataEndpoint:
     ) -> None:
         """Test the /files/{file_id}/metadata endpoint method."""
         file_id = mock_files_router._db.list_files()[0].id
+        assert file_id is not None
+
         update_request = UpdateFileMetadataRequest(
             filename=f"updated_{mock_file_metadata.filename}",
-            parent_directory=mock_file_metadata.parent_directory / "updated_directory",
+            parent_directory=mock_file_metadata.parent_directory / "updated_directory",  # type: ignore[call-arg]
         )
 
         response = asyncio.run(mock_files_router.update_file_metadata(mock_request_object, file_id, update_request))
