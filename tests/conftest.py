@@ -55,6 +55,7 @@ def mock_storage_config_dict() -> dict:
     return {
         "upload_chunk_size_kb": 8,
         "max_file_size_mb": 100,
+        "thumbnail_size": (10, 10),
     }
 
 

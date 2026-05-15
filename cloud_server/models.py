@@ -22,6 +22,7 @@ class StorageConfig(BaseModel):
 
     upload_chunk_size_kb: int = Field(default=8, description="Chunk size for file uploads in KB.")
     max_file_size_mb: int = Field(default=100, description="Maximum file size in MB.")
+    thumbnail_size: tuple[int, int] = Field(default=(200, 200), description="Thumbnail size (width, height).")
 
 
 class CloudServerConfig(TemplateServerConfig):
