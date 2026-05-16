@@ -2,9 +2,11 @@
 
 from collections.abc import Generator
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
+from PIL import Image
 from slowapi import Limiter
 from sqlalchemy import NullPool, create_engine
 
@@ -19,6 +21,8 @@ from cloud_server.models import (
 from cloud_server.routers.files_router import FilesRouter
 from cloud_server.server import FILES_ROUTER
 from cloud_server.thumbnail_generator import ThumbnailGenerator
+
+rng = np.random.default_rng()
 
 
 # General fixtures
@@ -95,13 +99,8 @@ def mock_cloud_server_config(
 def mock_files_metadata_database_manager(
     mock_db_config: ServerDatabaseConfig,
     mock_file_metadata: FileMetadata,
-    mock_tmp_storage_path: Path,
 ) -> Generator[FilesMetadataDatabaseManager]:
     """Provide a FilesMetadataDatabaseManager instance for testing."""
-    file_path = mock_tmp_storage_path / mock_file_metadata.parent_directory / mock_file_metadata.filename
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    file_path.write_text("Test file content")
-
     db_manager = FilesMetadataDatabaseManager()
     db_manager.configure(db_config=mock_db_config)
     pooled_engine = db_manager.engine
@@ -114,18 +113,130 @@ def mock_files_metadata_database_manager(
 
 # File Models
 @pytest.fixture
-def mock_file_metadata() -> FileMetadata:
+def mock_text_file(mock_tmp_storage_path: Path) -> Path:
+    """Create a mock text file in the storage directory."""
+    text_file = mock_tmp_storage_path / "test_file.txt"
+    text_file.parent.mkdir(parents=True, exist_ok=True)
+    text_file.write_text("fake text data")
+    return text_file
+
+
+@pytest.fixture
+def mock_image_file(mock_tmp_storage_path: Path) -> Path:
+    """Create a mock image file in the storage directory."""
+    image_file = mock_tmp_storage_path / "test_image.jpg"
+    image_file.parent.mkdir(parents=True, exist_ok=True)
+    image_file.write_text("fake image data")
+    return image_file
+
+
+@pytest.fixture
+def mock_video_file(mock_tmp_storage_path: Path) -> Path:
+    """Create a mock video file in the storage directory."""
+    video_file = mock_tmp_storage_path / "test_video.mp4"
+    video_file.parent.mkdir(parents=True, exist_ok=True)
+    video_file.write_text("fake video data")
+    return video_file
+
+
+@pytest.fixture
+def mock_file_metadata(mock_text_file: Path) -> FileMetadata:
     """Provide a mock FileMetadata instance."""
     return FileMetadata(
         id=None,
-        filename="test_file.txt",
+        filename=mock_text_file.name,
         parent_directory=Path("."),
         mime_type="text/plain",
         size=1024,
     )
 
 
+@pytest.fixture
+def mock_image_metadata(mock_image_file: Path) -> FileMetadata:
+    """Provide a FileMetadata instance for a mock image file."""
+    return FileMetadata(
+        id=1,
+        filename=mock_image_file.name,
+        parent_directory=Path("."),
+        mime_type="image/jpeg",
+        size=1024,
+    )
+
+
+@pytest.fixture
+def mock_video_metadata(mock_video_file: Path) -> FileMetadata:
+    """Provide a FileMetadata instance for a mock video file."""
+    return FileMetadata(
+        id=2,
+        filename=mock_video_file.name,
+        parent_directory=Path("."),
+        mime_type="video/mp4",
+        size=2048,
+    )
+
+
 # Thumbnail fixtures
+@pytest.fixture
+def mock_image_array(mock_storage_config: StorageConfig) -> np.ndarray:
+    """Provide a mock image array for video thumbnail generation."""
+    return rng.integers(0, 256, (*mock_storage_config.thumbnail_size, 3), dtype=np.uint8)
+
+
+@pytest.fixture
+def mock_image(mock_storage_config: StorageConfig) -> Image.Image:
+    """Mock image."""
+    mock_img = MagicMock(spec=Image.Image)
+    mock_img.copy.return_value = mock_img
+    mock_img.mode = "RGB"
+    mock_img.size = mock_storage_config.thumbnail_size
+    mock_img.convert.return_value = mock_img
+    mock_img.thumbnail = MagicMock()
+
+    def mock_save(path: Path, *args: object, **kwargs: object) -> None:
+        """Create a file when save is called."""
+        Path(path).touch()
+
+    mock_img.save = mock_save  # type: ignore[method-assign]
+    return mock_img
+
+
+@pytest.fixture
+def mock_image_open(mock_image: Image.Image) -> Generator[MagicMock]:
+    """Mock PIL.Image.open to return a mock image."""
+    mock_context = MagicMock()
+    mock_context.__enter__.return_value = mock_image
+    mock_context.__exit__.return_value = None
+
+    with patch("PIL.Image.open", return_value=mock_context) as mock_open:
+        yield mock_open
+
+
+@pytest.fixture
+def mock_image_fromarray(mock_image: Image.Image) -> Generator[MagicMock]:
+    """Mock PIL.Image.fromarray to return a mock image."""
+    with patch("PIL.Image.fromarray", return_value=mock_image) as mock_fromarray:
+        yield mock_fromarray
+
+
+@pytest.fixture
+def mock_video_capture(mock_image_array: np.ndarray) -> Generator[MagicMock]:
+    """Mock cv2.VideoCapture for video thumbnail generation."""
+    mock_video = MagicMock()
+    mock_video.isOpened.return_value = True
+    mock_video.get.return_value = 30.0
+    mock_video.read.return_value = (True, mock_image_array)
+
+    with patch("cv2.VideoCapture", return_value=mock_video) as mock_cap:
+        yield mock_cap
+
+
+@pytest.fixture
+def mock_cv2_cvtcolor(mock_image_array: np.ndarray) -> Generator[MagicMock]:
+    """Mock cv2.cvtColor for color conversion."""
+    with patch("cv2.cvtColor", return_value=mock_image_array) as mock_cvt:
+        yield mock_cvt
+
+
 @pytest.fixture
 def mock_thumbnail_generator(mock_tmp_thumbnails_path: Path) -> ThumbnailGenerator:
     """Provide a ThumbnailGenerator instance for testing."""
