@@ -75,7 +75,17 @@ class TestUploadFileEndpoint:
             mock_file = MagicMock(spec=UploadFile)
             mock_file.filename = f"new_{file_metadata.filename}"
             mock_file.content_type = file_metadata.mime_type
-            mock_file.read.return_value = (mock_tmp_storage_path / file_metadata.filepath).read_bytes()
+
+            file_contents = (mock_tmp_storage_path / file_metadata.filepath).read_bytes()
+            chunk_size = mock_files_router._storage_config.upload_chunk_size_kb * 1024
+            chunks_list = [file_contents[i : i + chunk_size] for i in range(0, len(file_contents), chunk_size)]
+            chunks_list.append(b"")  # Empty chunk to signal end of file
+
+            async def mock_read(size: int = -1, _chunks: list[bytes] = chunks_list) -> bytes:
+                """Mock async read that returns chunks."""
+                return _chunks.pop(0) if _chunks else b""
+
+            mock_file.read = mock_read
 
             response = asyncio.run(
                 mock_files_router.upload_file(mock_request_object, mock_file, str(file_metadata.parent_directory))
@@ -84,7 +94,7 @@ class TestUploadFileEndpoint:
             assert response.message == "File uploaded successfully."
             assert response.file_metadata.filepath == file_metadata.parent_directory / mock_file.filename
             assert response.file_metadata.mime_type == mock_file.content_type
-            assert response.file_metadata.size == len(mock_file.read.return_value)
+            assert response.file_metadata.size == len(file_contents)
 
 
 class TestGetFileEndpoint:
