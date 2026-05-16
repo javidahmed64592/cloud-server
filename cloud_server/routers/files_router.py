@@ -288,6 +288,12 @@ class FilesRouter(BaseRouter):
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
         filepath.unlink()
+        logger.info("Deleted file %s from storage: %s", file_id, filepath)
+
+        if not any(filepath.parent.iterdir()):
+            filepath.parent.rmdir()
+            logger.info("Deleted empty parent directory: %s", filepath.parent)
+
         if (thumbnail_path := self._thumbnail_generator.get_thumbnail_path(file_id=file_id)).exists():
             thumbnail_path.unlink()
 
@@ -351,6 +357,11 @@ class FilesRouter(BaseRouter):
 
             new_filepath.parent.mkdir(parents=True, exist_ok=True)
             old_filepath.rename(new_filepath)
+            logger.info("Moved file %s in storage from %s to %s", file_id, old_filepath, new_filepath)
+
+            if not old_filepath.parent.iterdir():
+                old_filepath.parent.rmdir()
+                logger.info("Deleted empty parent directory: %s", old_filepath.parent)
 
         return UpdateFileMetadataResponse(
             message="File metadata updated successfully.",
