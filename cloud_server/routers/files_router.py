@@ -359,7 +359,7 @@ class FilesRouter(BaseRouter):
             old_filepath.rename(new_filepath)
             logger.info("Moved file %s in storage from %s to %s", file_id, old_filepath, new_filepath)
 
-            if not old_filepath.parent.iterdir():
+            if not any(old_filepath.parent.iterdir()):
                 old_filepath.parent.rmdir()
                 logger.info("Deleted empty parent directory: %s", old_filepath.parent)
 
