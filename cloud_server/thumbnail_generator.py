@@ -23,14 +23,6 @@ class ThumbnailGenerator:
         self._thumbnails_directory.mkdir(parents=True, exist_ok=True)
         logger.info("Saving thumbnails to directory: %s", thumbnails_directory)
 
-    def _thumbnail_path(self, file_id: int) -> Path:
-        """Get the thumbnail path for a given file ID.
-
-        :param int file_id: Unique identifier for the file
-        :return Path: Path to the thumbnail image
-        """
-        return self._thumbnails_directory / f"{file_id}.jpg"
-
     def _generate_image_thumbnail(self, filepath: Path) -> Image.Image:
         """Generate thumbnail for an image file.
 
@@ -84,6 +76,14 @@ class ThumbnailGenerator:
         img.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
         img.save(output_path, "JPEG", quality=85, optimize=True)
 
+    def get_thumbnail_path(self, file_id: int) -> Path:
+        """Get the thumbnail path for a given file ID.
+
+        :param int file_id: Unique identifier for the file
+        :return Path: Path to the thumbnail image
+        """
+        return self._thumbnails_directory / f"{file_id}.jpg"
+
     def generate_thumbnail(self, filepath: Path, mime_type: str, file_id: int, thumbnail_size: tuple[int, int]) -> None:
         """Generate thumbnail based on MIME type.
 
@@ -94,7 +94,7 @@ class ThumbnailGenerator:
         :raises FileExistsError: If a thumbnail already exists for the file
         :raises ValueError: If the MIME type is unsupported for thumbnail generation
         """
-        if (output_path := self._thumbnail_path(file_id)).exists():
+        if (output_path := self.get_thumbnail_path(file_id)).exists():
             error_msg = f"Thumbnail already exists for file {file_id}: {filepath}"
             logger.error(error_msg)
             raise FileExistsError(error_msg)
@@ -150,7 +150,7 @@ class ThumbnailGenerator:
             existing_thumbnails.discard(file_metadata.id)
 
         for stale_id in existing_thumbnails:
-            stale_thumbnail = self._thumbnail_path(file_id=stale_id)
+            stale_thumbnail = self.get_thumbnail_path(file_id=stale_id)
 
             try:
                 stale_thumbnail.unlink()
@@ -162,11 +162,3 @@ class ThumbnailGenerator:
         logger.info(
             "Synchronized %d thumbnails with storage directory.", len(list(self._thumbnails_directory.glob("*.jpg")))
         )
-
-    def get_thumbnail_path(self, file_id: int) -> Path:
-        """Get the path to the thumbnail for a given file ID.
-
-        :param int file_id: Unique identifier for the file
-        :return Path: Path to the thumbnail image
-        """
-        return self._thumbnail_path(file_id)

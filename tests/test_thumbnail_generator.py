@@ -21,9 +21,14 @@ def mock_image() -> Image.Image:
     mock_img.copy.return_value = mock_img
     mock_img.mode = "RGB"
     mock_img.size = (10, 10)
-    mock_img.thumbnail = MagicMock()
-    mock_img.save = MagicMock()
     mock_img.convert.return_value = mock_img
+    mock_img.thumbnail = MagicMock()
+
+    def mock_save(path: Path, *args: object, **kwargs: object) -> None:
+        """Create a file when save is called."""
+        Path(path).touch()
+
+    mock_img.save = mock_save  # type: ignore[method-assign]
     return mock_img
 
 
@@ -120,7 +125,6 @@ class TestThumbnailGenerator:
         """Test thumbnail path generation."""
         file_id = 123
         expected_path = mock_thumbnail_generator._thumbnails_directory / f"{file_id}.jpg"
-        assert mock_thumbnail_generator._thumbnail_path(file_id=file_id) == expected_path
         assert mock_thumbnail_generator.get_thumbnail_path(file_id=file_id) == expected_path
 
     def test_generate_image_thumbnail(
@@ -160,7 +164,7 @@ class TestThumbnailGenerator:
         """Test public generate_thumbnail method saves thumbnail to correct location."""
         file_id = 1
         thumbnail_size = (128, 128)
-        expected_path = mock_thumbnail_generator._thumbnail_path(file_id=file_id)
+        expected_path = mock_thumbnail_generator.get_thumbnail_path(file_id=file_id)
 
         mock_thumbnail_generator.generate_thumbnail(
             filepath=mock_image_file,
@@ -171,7 +175,7 @@ class TestThumbnailGenerator:
 
         mock_image_open.assert_called_once_with(mock_image_file)
         mock_image.thumbnail.assert_called_once_with(thumbnail_size, Image.Resampling.LANCZOS)  # type: ignore[attr-defined]
-        mock_image.save.assert_called_once_with(expected_path, "JPEG", quality=85, optimize=True)  # type: ignore[attr-defined]
+        assert expected_path.exists()
 
     def test_synchronize_with_storage(
         self,
@@ -190,7 +194,6 @@ class TestThumbnailGenerator:
         """Test synchronize_with_storage generates thumbnails for image and video files."""
         files_metadata = [mock_image_metadata, mock_video_metadata]
         thumbnail_size = (128, 128)
-        expected_thumbnail_count = len(files_metadata)
 
         mock_thumbnail_generator.synchronize_with_storage(
             storage_directory=mock_tmp_storage_path,
@@ -198,6 +201,5 @@ class TestThumbnailGenerator:
             thumbnail_size=thumbnail_size,
         )
 
-        # Verify thumbnail and save were called for both files
-        assert mock_image.save.call_count == expected_thumbnail_count  # type: ignore[attr-defined]
-        assert mock_image.thumbnail.call_count == expected_thumbnail_count  # type: ignore[attr-defined]
+        for metadata in files_metadata:
+            assert mock_thumbnail_generator.get_thumbnail_path(file_id=metadata.id).exists()
