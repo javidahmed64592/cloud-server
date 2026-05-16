@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import aiofiles
 from fastapi import HTTPException, Request, UploadFile
@@ -41,6 +42,46 @@ class FilesRouter(BaseRouter):
         self._storage_directory = storage_directory
         self._storage_config = storage_config
         self._thumbnail_generator = thumbnail_generator
+
+    def _raise_file_size_exceeded(self, file_size: int, max_size: int) -> None:
+        """Raise HTTPException for file size exceeded.
+
+        :param int file_size: The actual file size
+        :param int max_size: The maximum allowed size
+        :raises HTTPException: Always raises with BAD_REQUEST status
+        """
+        error_msg = f"File size ({file_size} bytes) exceeds maximum allowed size ({max_size} bytes)"
+        logger.error(error_msg)
+        raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+
+    async def _stream_upload_to_temp(
+        self, file: UploadFile, temp_filepath: Path, max_size_bytes: int, chunk_size: int
+    ) -> int:
+        """Stream uploaded file to temporary location while validating size.
+
+        :param UploadFile file: The file being uploaded
+        :param Path temp_filepath: Path to temporary file
+        :param int max_size_bytes: Maximum allowed file size
+        :param int chunk_size: Size of chunks to read
+        :return int: Total file size in bytes
+        :raises HTTPException: If file size exceeds maximum
+        """
+        file_size = 0
+        async with aiofiles.open(temp_filepath, "wb") as f:
+            while chunk := await file.read(chunk_size):
+                file_size += len(chunk)
+                if file_size > max_size_bytes:
+                    self._raise_file_size_exceeded(file_size, max_size_bytes)
+                await f.write(chunk)
+        return file_size
+
+    def _cleanup_temp_file(self, temp_filepath: Path | None) -> None:
+        """Clean up temporary file if it exists.
+
+        :param Path | None temp_filepath: Path to temporary file or None
+        """
+        if temp_filepath and temp_filepath.exists():
+            temp_filepath.unlink()
 
     def setup_routes(self) -> None:
         """Set up the API routes."""
@@ -123,18 +164,25 @@ class FilesRouter(BaseRouter):
             logger.error(error_msg)
             raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
 
-        # Validate file size
+        # Stream file to temp location while validating size
         max_size_bytes = self._storage_config.max_file_size_mb * MB_TO_BYTES
-        file_size = 0
+        chunk_size = self._storage_config.upload_chunk_size_kb * 1024
+        temp_filepath = None
 
-        # Read file to determine size
-        file_contents = await file.read()
-        file_size = len(file_contents)
+        try:
+            temp_file = NamedTemporaryFile(delete=False, dir=self._storage_directory)
+            temp_filepath = Path(temp_file.name)
+            temp_file.close()
 
-        if file_size > max_size_bytes:
-            error_msg = f"File size ({file_size} bytes) exceeds maximum allowed size ({max_size_bytes} bytes)"
-            logger.error(error_msg)
-            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+            file_size = await self._stream_upload_to_temp(
+                file=file, temp_filepath=temp_filepath, max_size_bytes=max_size_bytes, chunk_size=chunk_size
+            )
+
+        except Exception as e:
+            self._cleanup_temp_file(temp_filepath=temp_filepath)
+            error_msg = f"Failed to read uploaded file: {file.filename}"
+            logger.exception(error_msg)
+            raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
         # Create file metadata
         file_metadata = FileMetadata(
@@ -152,17 +200,16 @@ class FilesRouter(BaseRouter):
         if (filepath := self._storage_directory / file_metadata.filepath).exists():
             error_msg = f"File already exists in storage: {filepath}"
             logger.error(error_msg)
+            self._cleanup_temp_file(temp_filepath=temp_filepath)
             raise HTTPException(status_code=ResponseCode.CONFLICT, detail=error_msg)
 
-        # Save file to storage using chunked writing
+        # Move temp file to final location
         try:
-            chunk_size = self._storage_config.upload_chunk_size_kb * 1024
-            async with aiofiles.open(filepath, "wb") as f:
-                for i in range(0, len(file_contents), chunk_size):
-                    await f.write(file_contents[i : i + chunk_size])
+            temp_filepath.rename(filepath)
         except OSError as e:
-            error_msg = f"Failed to write file to storage: {filepath}"
+            error_msg = f"Failed to move file to final location: {filepath}"
             logger.exception(error_msg)
+            self._cleanup_temp_file(temp_filepath=temp_filepath)
             raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
         try:
@@ -241,6 +288,12 @@ class FilesRouter(BaseRouter):
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
         filepath.unlink()
+        logger.info("Deleted file %s from storage: %s", file_id, filepath)
+
+        if not any(filepath.parent.iterdir()):
+            filepath.parent.rmdir()
+            logger.info("Deleted empty parent directory: %s", filepath.parent)
+
         if (thumbnail_path := self._thumbnail_generator.get_thumbnail_path(file_id=file_id)).exists():
             thumbnail_path.unlink()
 
@@ -304,6 +357,11 @@ class FilesRouter(BaseRouter):
 
             new_filepath.parent.mkdir(parents=True, exist_ok=True)
             old_filepath.rename(new_filepath)
+            logger.info("Moved file %s in storage from %s to %s", file_id, old_filepath, new_filepath)
+
+            if not any(old_filepath.parent.iterdir()):
+                old_filepath.parent.rmdir()
+                logger.info("Deleted empty parent directory: %s", old_filepath.parent)
 
         return UpdateFileMetadataResponse(
             message="File metadata updated successfully.",
