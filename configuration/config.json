@@ -35,7 +35,7 @@
   },
   "storage_config": {
     "upload_chunk_size_kb": 8,
-    "max_file_size_mb": 100,
+    "max_file_size_mb": 2000,
     "thumbnail_size": [200, 200]
   }
 }
