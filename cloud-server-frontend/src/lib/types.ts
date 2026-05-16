@@ -53,6 +53,6 @@ export interface UpdateFileMetadataResponse extends BaseResponse {
 
 // API request models (mirrors UpdateFileMetadataRequest)
 export interface UpdateFileMetadataRequest {
-  filename: string;
-  parentDirectory: string;
+  filename?: string;
+  parentDirectory?: string;
 }
