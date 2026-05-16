@@ -4,17 +4,19 @@ FROM node:25-alpine AS frontend-builder
 
 WORKDIR /frontend
 
-# Copy frontend package files
-COPY cloud-server-frontend/package*.json ./
+# # Copy frontend package files
+# COPY cloud-server-frontend/package*.json ./
 
-# Install dependencies
-RUN npm ci
+# # Install dependencies
+# RUN npm ci
 
-# Copy frontend source
-COPY cloud-server-frontend/ ./
+# # Copy frontend source
+# COPY cloud-server-frontend/ ./
 
-# Build static export
-RUN npm run build
+# # Build static export
+# RUN npm run build
+
+RUN mkdir -p out && touch out/index.html
 
 # Stage 2: Backend build stage - build wheel using uv
 FROM python:3.13-slim AS backend-builder
