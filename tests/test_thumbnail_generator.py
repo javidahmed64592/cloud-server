@@ -98,5 +98,6 @@ class TestThumbnailGenerator:
             thumbnail_size=mock_storage_config.thumbnail_size,
         )
 
-        for metadata in files_metadata:
-            assert mock_thumbnail_generator.get_thumbnail_path(file_id=metadata.id).exists()
+        for file_metadata in files_metadata:
+            assert file_metadata.id is not None
+            assert mock_thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id).exists()

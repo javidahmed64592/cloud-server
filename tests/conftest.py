@@ -145,7 +145,7 @@ def mock_video_file(
     video_file = mock_tmp_storage_path / "test_video.mp4"
     video_file.parent.mkdir(parents=True, exist_ok=True)
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # type: ignore[attr-defined]
     out = cv2.VideoWriter(str(video_file), fourcc, 30.0, mock_storage_config.thumbnail_size)
 
     for _ in range(10):
@@ -212,7 +212,7 @@ def mock_image(mock_storage_config: StorageConfig) -> Image.Image:
         """Create a file when save is called."""
         Path(path).touch()
 
-    mock_img.save = mock_save  # type: ignore[method-assign]
+    mock_img.save = mock_save
     return mock_img
 
 

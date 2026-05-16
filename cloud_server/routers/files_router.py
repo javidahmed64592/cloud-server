@@ -181,7 +181,7 @@ class FilesRouter(BaseRouter):
             self._thumbnail_generator.generate_thumbnail(
                 filepath=filepath,
                 mime_type=file_metadata.mime_type,
-                file_id=created_file_metadata.id,  # type: ignore[union-attr]
+                file_id=created_file_metadata.id,  # type: ignore[arg-type]
                 thumbnail_size=self._storage_config.thumbnail_size,
             )
 
@@ -326,7 +326,7 @@ class FilesRouter(BaseRouter):
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
-        thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # type: ignore[union-attr]
+        thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # type: ignore[arg-type]
 
         return FileResponse(
             path=thumbnail_path,
