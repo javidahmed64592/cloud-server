@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 
 import UploadButton from "@/components/drive/UploadButton";
 import * as api from "@/lib/api";
@@ -206,7 +207,10 @@ describe("UploadButton", () => {
       expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
 
-    jest.advanceTimersByTime(5000);
+    // Advance timers and wait for state update
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
 
     await waitFor(() => {
       expect(screen.queryByText(errorMessage)).not.toBeInTheDocument();
@@ -235,7 +239,6 @@ describe("UploadButton", () => {
   });
 
   it("does not upload when no file selected", async () => {
-    const user = userEvent.setup();
     const { container } = render(
       <UploadButton currentPath={currentPath} onUpload={mockOnUpload} />
     );
@@ -244,11 +247,18 @@ describe("UploadButton", () => {
       'input[type="file"]'
     ) as HTMLInputElement;
 
-    // Trigger change without files
-    await user.upload(fileInput, []);
+    // Trigger change with empty files
+    Object.defineProperty(fileInput, "files", {
+      value: null,
+      writable: false,
+    });
+    fileInput.dispatchEvent(new Event("change", { bubbles: true }));
 
-    expect(mockUploadFile).not.toHaveBeenCalled();
-    expect(mockOnUpload).not.toHaveBeenCalled();
+    // Should not call upload functions
+    await waitFor(() => {
+      expect(mockUploadFile).not.toHaveBeenCalled();
+      expect(mockOnUpload).not.toHaveBeenCalled();
+    });
   });
 
   it("handles empty FileList", async () => {

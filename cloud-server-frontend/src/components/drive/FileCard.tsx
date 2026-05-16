@@ -168,10 +168,17 @@ export default function FileCard({
     file.mime_type.startsWith("image/") || file.mime_type.startsWith("video/");
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="group relative flex flex-col items-center gap-2 rounded-lg p-3 transition-colors duration-150 hover:bg-background-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-border-accent w-full"
+      onKeyDown={e => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="group relative flex flex-col items-center gap-2 rounded-lg p-3 transition-colors duration-150 hover:bg-background-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-border-accent w-full cursor-pointer"
     >
       {/* Thumbnail/Icon area */}
       <div className="relative flex h-36 w-36 items-center justify-center rounded bg-background-tertiary">
@@ -231,6 +238,6 @@ export default function FileCard({
         </p>
         <p className="text-xs text-text-muted">{formatFileSize(file.size)}</p>
       </div>
-    </button>
+    </div>
   );
 }
