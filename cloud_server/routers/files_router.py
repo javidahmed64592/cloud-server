@@ -84,6 +84,14 @@ class FilesRouter(BaseRouter):
             limited=True,
             authentication_required=True,
         )
+        self.add_route(
+            endpoint="/{file_id}/thumbnail",
+            handler_function=self.get_thumbnail,
+            response_model=None,
+            methods=["GET"],
+            limited=True,
+            authentication_required=True,
+        )
 
     async def list_files(self, request: Request) -> ListFilesResponse:
         """Get metadata for all files.
@@ -169,6 +177,14 @@ class FilesRouter(BaseRouter):
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
+        if file_metadata.mime_type.startswith(("image/", "video/")):
+            self._thumbnail_generator.generate_thumbnail(
+                filepath=filepath,
+                mime_type=file_metadata.mime_type,
+                file_id=created_file_metadata.id,  # type: ignore[union-attr]
+                thumbnail_size=self._storage_config.thumbnail_size,
+            )
+
         return UploadFileResponse(
             message="File uploaded successfully.",
             file_metadata=created_file_metadata,
@@ -225,6 +241,9 @@ class FilesRouter(BaseRouter):
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
 
         filepath.unlink()
+        if (thumbnail_path := self._thumbnail_generator.get_thumbnail_path(file_id=file_id)).exists():
+            thumbnail_path.unlink()
+
         return DeleteFileResponse(
             message="File deleted successfully.",
             file_metadata=file_metadata,
@@ -289,4 +308,28 @@ class FilesRouter(BaseRouter):
         return UpdateFileMetadataResponse(
             message="File metadata updated successfully.",
             file_metadata=updated_file_metadata,
+        )
+
+    async def get_thumbnail(self, request: Request, file_id: int) -> FileResponse:
+        """Get a thumbnail for a file by its ID.
+
+        :param Request request: The incoming HTTP request
+        :param int file_id: The ID of the file to get a thumbnail for
+        :return FileResponse: The requested thumbnail image
+        :raises HTTPException: If the file metadata doesn't exist in the database or if the file is not found in storage
+        """
+        # Retrieve file metadata from database
+        try:
+            file_metadata = self._db.perform_file_metadata_action(action=DatabaseAction.READ, file_id=file_id)
+        except ValueError as e:
+            error_msg = f"File metadata doesn't exist in database for file {file_id}!"
+            logger.exception(error_msg)
+            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
+
+        thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # type: ignore[union-attr]
+
+        return FileResponse(
+            path=thumbnail_path,
+            filename=thumbnail_path.name,
+            media_type="image/jpeg",
         )

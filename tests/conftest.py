@@ -4,6 +4,7 @@ from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import cv2
 import numpy as np
 import pytest
 from PIL import Image
@@ -126,20 +127,31 @@ def mock_text_file(mock_tmp_storage_path: Path) -> Path:
 
 
 @pytest.fixture
-def mock_image_file(mock_tmp_storage_path: Path) -> Path:
+def mock_image_file(mock_tmp_storage_path: Path, mock_storage_config: StorageConfig) -> Path:
     """Create a mock image file in the storage directory."""
     image_file = mock_tmp_storage_path / "test_image.jpg"
     image_file.parent.mkdir(parents=True, exist_ok=True)
-    image_file.write_text("fake image data")
+
+    img = Image.new("RGB", mock_storage_config.thumbnail_size, color=(255, 0, 0))
+    img.save(image_file, format="JPEG")
     return image_file
 
 
 @pytest.fixture
-def mock_video_file(mock_tmp_storage_path: Path) -> Path:
+def mock_video_file(
+    mock_tmp_storage_path: Path, mock_storage_config: StorageConfig, mock_image_array: np.ndarray
+) -> Path:
     """Create a mock video file in the storage directory."""
     video_file = mock_tmp_storage_path / "test_video.mp4"
     video_file.parent.mkdir(parents=True, exist_ok=True)
-    video_file.write_text("fake video data")
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(str(video_file), fourcc, 30.0, mock_storage_config.thumbnail_size)
+
+    for _ in range(10):
+        out.write(mock_image_array)
+
+    out.release()
     return video_file
 
 
