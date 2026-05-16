@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Breadcrumb from "@/components/drive/Breadcrumb";
-import { canViewFile } from "@/components/drive/FileCard";
 import FileGrid from "@/components/drive/FileGrid";
 import FileViewer from "@/components/drive/FileViewer";
 import MoveDialog from "@/components/drive/MoveDialog";
@@ -68,9 +67,6 @@ export default function DrivePage() {
   // --- File viewer ---
   const [viewerFile, setViewerFile] = useState<FileMetadata | null>(null);
   const [viewerBlobUrl, setViewerBlobUrl] = useState<string | null>(null);
-  const [viewerTextContent, setViewerTextContent] = useState<string | null>(
-    null
-  );
   const [isViewerLoading, setIsViewerLoading] = useState(false);
 
   // --- Move dialog ---
@@ -83,20 +79,34 @@ export default function DrivePage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // ---------------------------------------------------------------------------
+  // Derived state (must be before callbacks that use it)
+  // ---------------------------------------------------------------------------
+  const currentFiles = useMemo(
+    () => getFilesInDirectory(allFiles, currentPath),
+    [allFiles, currentPath]
+  );
+  const currentFolders = useMemo(
+    () => getSubfolders(allFiles, currentPath),
+    [allFiles, currentPath]
+  );
+
+  // ---------------------------------------------------------------------------
   // Fetch all file metadata on mount
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
     listFiles()
       .then(files => {
-        if (!cancelled) setAllFiles(files);
+        if (!cancelled) {
+          setAllFiles(files);
+          setIsLoading(false);
+        }
       })
       .catch(err => {
-        if (!cancelled) setError(String(err));
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setError(String(err));
+          setIsLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -165,31 +175,8 @@ export default function DrivePage() {
     try {
       const blobUrl = await getFileBlob(file.id);
 
-      if (!canViewFile(file.mime_type)) {
-        // Non-viewable file — trigger browser download then release the URL
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = file.filename;
-        a.click();
-        URL.revokeObjectURL(blobUrl);
-        setIsViewerLoading(false);
-        return;
-      }
-
-      let textContent: string | null = null;
-      if (file.mime_type.startsWith("text/")) {
-        try {
-          const resp = await fetch(blobUrl);
-          textContent = await resp.text();
-        } catch (fetchErr) {
-          console.error("Failed to read text content:", fetchErr);
-          textContent = `Error loading text content: ${String(fetchErr)}`;
-        }
-      }
-
       setViewerFile(file);
       setViewerBlobUrl(blobUrl);
-      setViewerTextContent(textContent);
     } catch (err) {
       setError(`Failed to open file: ${String(err)}`);
     } finally {
@@ -201,8 +188,40 @@ export default function DrivePage() {
     if (viewerBlobUrl) URL.revokeObjectURL(viewerBlobUrl);
     setViewerFile(null);
     setViewerBlobUrl(null);
-    setViewerTextContent(null);
   }, [viewerBlobUrl]);
+
+  // ---------------------------------------------------------------------------
+  // Navigate to previous/next file in viewer
+  // ---------------------------------------------------------------------------
+  const handleNavigateFile = useCallback(
+    (direction: "previous" | "next") => {
+      if (!viewerFile) return;
+      const idx = currentFiles.findIndex(f => f.id === viewerFile.id);
+      if (idx === -1) return;
+
+      const nextIdx =
+        direction === "next"
+          ? (idx + 1) % currentFiles.length
+          : (idx - 1 + currentFiles.length) % currentFiles.length;
+      const nextFile = currentFiles[nextIdx];
+
+      if (nextFile) {
+        handleCloseViewer();
+        handleOpenFile(nextFile);
+      }
+    },
+    [viewerFile, currentFiles, handleOpenFile, handleCloseViewer]
+  );
+
+  const handlePrevious = useCallback(
+    () => handleNavigateFile("previous"),
+    [handleNavigateFile]
+  );
+
+  const handleNext = useCallback(
+    () => handleNavigateFile("next"),
+    [handleNavigateFile]
+  );
 
   // ---------------------------------------------------------------------------
   // Upload — add new entry to cache without re-fetching everything
@@ -254,12 +273,6 @@ export default function DrivePage() {
   );
 
   // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
-  const currentFiles = getFilesInDirectory(allFiles, currentPath);
-  const currentFolders = getSubfolders(allFiles, currentPath);
-
-  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   if (isLoading) {
@@ -271,7 +284,7 @@ export default function DrivePage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Top bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Breadcrumb path={currentPath} onNavigate={handleBreadcrumbNavigate} />
@@ -313,8 +326,10 @@ export default function DrivePage() {
         <FileViewer
           file={viewerFile}
           blobUrl={viewerBlobUrl}
-          textContent={viewerTextContent}
           onClose={handleCloseViewer}
+          {...(currentFiles.length > 1
+            ? { onPrevious: handlePrevious, onNext: handleNext }
+            : {})}
         />
       )}
 

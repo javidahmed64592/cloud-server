@@ -107,25 +107,6 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
 // Action icons
 // ---------------------------------------------------------------------------
 
-function EyeIcon() {
-  return (
-    <svg
-      className="h-4 w-4"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-      />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
 function MoveIcon() {
   return (
     <svg
@@ -181,48 +162,35 @@ export default function FileCard({
   onMove,
   onDelete,
 }: FileCardProps) {
-  const viewable = canViewFile(file.mime_type);
-  const hasThumbnail =
+  const isMediaFile =
     file.mime_type.startsWith("image/") || file.mime_type.startsWith("video/");
 
   return (
-    <div className="group relative flex flex-col rounded-lg border border-border bg-background-secondary overflow-hidden transition-colors duration-150 hover:border-border-accent">
-      {/* Preview area */}
-      <div
-        className="relative flex h-28 w-full cursor-pointer items-center justify-center bg-background-tertiary select-none"
-        onClick={onOpen}
-        title={viewable ? `View ${file.filename}` : `Download ${file.filename}`}
-      >
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group relative flex flex-col items-center gap-2 rounded-lg p-3 transition-colors duration-150 hover:bg-background-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-border-accent w-full"
+    >
+      {/* Thumbnail/Icon area */}
+      <div className="relative flex h-36 w-36 items-center justify-center rounded bg-background-tertiary">
         {thumbnail ? (
           <img
             src={thumbnail}
             alt={file.filename}
-            className="h-full w-full object-cover"
+            className="h-full w-full rounded object-cover"
           />
-        ) : hasThumbnail ? (
-          // Thumbnail pending — show skeleton
-          <div className="h-full w-full animate-pulse bg-background-tertiary" />
+        ) : isMediaFile ? (
+          // Thumbnail loading skeleton
+          <div className="h-full w-full animate-pulse rounded bg-background-tertiary" />
         ) : (
+          // Placeholder icon for non-media files
           <span className="text-text-muted opacity-50">
             <FileTypeIcon mimeType={file.mime_type} />
           </span>
         )}
 
         {/* Hover action overlay */}
-        <div className="absolute inset-0 flex items-center justify-center gap-1.5 bg-black/65 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-          {viewable && (
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                onOpen();
-              }}
-              className="rounded p-1.5 bg-white/10 text-white hover:bg-border-accent transition-colors"
-              title="View"
-            >
-              <EyeIcon />
-            </button>
-          )}
+        <div className="absolute inset-0 flex items-center justify-center gap-1 rounded bg-black/70 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
           <button
             type="button"
             onClick={e => {
@@ -248,16 +216,16 @@ export default function FileCard({
         </div>
       </div>
 
-      {/* Info */}
-      <div className="px-2 py-1.5">
+      {/* File info */}
+      <div className="w-full text-center">
         <p
-          className="truncate text-xs font-medium text-text-primary"
+          className="truncate text-sm text-text-primary px-1"
           title={file.filename}
         >
           {file.filename}
         </p>
         <p className="text-xs text-text-muted">{formatFileSize(file.size)}</p>
       </div>
-    </div>
+    </button>
   );
 }

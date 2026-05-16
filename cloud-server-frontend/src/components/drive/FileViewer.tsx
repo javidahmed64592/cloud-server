@@ -1,28 +1,33 @@
 "use client";
 
 import { useEffect } from "react";
+
 import type { FileMetadata } from "@/lib/types";
 
 interface FileViewerProps {
   file: FileMetadata;
   blobUrl: string;
-  textContent: string | null;
   onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
 }
 
 export default function FileViewer({
   file,
   blobUrl,
-  textContent,
   onClose,
+  onPrevious,
+  onNext,
 }: FileViewerProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key === "ArrowLeft" && onPrevious) onPrevious();
+      if (e.key === "ArrowRight" && onNext) onNext();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, onPrevious, onNext]);
 
   const renderContent = () => {
     if (file.mime_type.startsWith("image/")) {
@@ -36,24 +41,41 @@ export default function FileViewer({
     }
     if (file.mime_type.startsWith("video/")) {
       return (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
         <video
           src={blobUrl}
           controls
           autoPlay
           className="max-h-[72vh] max-w-full rounded"
-          onError={e => console.error("Video playback error:", e)}
+          onError={e => {
+            // eslint-disable-next-line no-console
+            console.error("Video playback error:", e);
+          }}
         />
       );
     }
-    if (file.mime_type.startsWith("text/")) {
-      return (
-        <pre className="max-h-[72vh] w-full overflow-auto whitespace-pre-wrap rounded bg-background-tertiary p-4 text-sm text-text-secondary font-mono leading-relaxed">
-          {textContent || "Loading..."}
-        </pre>
-      );
-    }
-    return null;
+    // Placeholder for other file types
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 p-8 text-text-muted">
+        <svg
+          className="h-16 w-16 opacity-50"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"
+          />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 2v6h6" />
+        </svg>
+        <p className="text-sm">Preview not available for this file type</p>
+        <p className="text-xs opacity-70">
+          Use the download button to save the file
+        </p>
+      </div>
+    );
   };
 
   return (
@@ -61,6 +83,60 @@ export default function FileViewer({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
       onClick={onClose}
     >
+      {/* Previous button */}
+      {onPrevious && (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onPrevious();
+          }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+          title="Previous (←)"
+        >
+          <svg
+            className="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </button>
+      )}
+
+      {/* Next button */}
+      {onNext && (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-3 text-white transition-all hover:bg-black/70 hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+          title="Next (→)"
+        >
+          <svg
+            className="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
+      )}
+
       <div
         className="flex w-full max-w-4xl flex-col gap-3 rounded-xl border border-border bg-background-secondary p-4 shadow-terminal"
         onClick={e => e.stopPropagation()}

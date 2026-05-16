@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+
 import { uploadFile } from "@/lib/api";
 import type { FileMetadata } from "@/lib/types";
 
@@ -30,6 +31,7 @@ export default function UploadButton({
       setError(null);
     } catch (err) {
       const errorMsg = String(err);
+      // eslint-disable-next-line no-console
       console.error("Upload failed:", errorMsg);
       setError(errorMsg);
       // Keep error visible for 5 seconds

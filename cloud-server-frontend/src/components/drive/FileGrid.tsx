@@ -1,8 +1,8 @@
 "use client";
 
-import type { FileMetadata } from "@/lib/types";
 import FileCard from "@/components/drive/FileCard";
 import FolderCard from "@/components/drive/FolderCard";
+import type { FileMetadata } from "@/lib/types";
 
 interface FileGridProps {
   folders: string[];
@@ -32,7 +32,7 @@ export default function FileGrid({
   }
 
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
       {folders.map(name => (
         <FolderCard
           key={name}
