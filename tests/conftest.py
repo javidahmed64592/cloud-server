@@ -4,192 +4,259 @@ from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import cv2
+import numpy as np
 import pytest
+from PIL import Image
 from slowapi import Limiter
+from sqlalchemy import NullPool, create_engine
 
-from python_template_server.models import (
-    CertificateConfigModel,
-    CORSConfigModel,
-    DatabaseConfig,
-    JSONResponseConfigModel,
-    RateLimitConfigModel,
-    SecurityConfigModel,
-    TemplateServerConfig,
+from cloud_server.db import FilesMetadataDatabaseManager
+from cloud_server.models import (
+    CloudServerConfig,
+    DatabaseAction,
+    FileMetadata,
+    ServerDatabaseConfig,
+    StorageConfig,
 )
-from python_template_server.routers.template_server_router import TemplateServerRouter
-from python_template_server.template_server import TEMPLATE_SERVER_ROUTER
+from cloud_server.routers.files_router import FilesRouter
+from cloud_server.server import FILES_ROUTER
+from cloud_server.thumbnail_generator import ThumbnailGenerator
+
+rng = np.random.default_rng()
 
 
 # General fixtures
-@pytest.fixture
-def mock_exists() -> Generator[MagicMock]:
-    """Mock the Path.exists() method."""
-    with patch("pathlib.Path.exists") as mock_exists:
-        yield mock_exists
-
-
-@pytest.fixture
-def mock_mkdir() -> Generator[MagicMock]:
-    """Mock Path.mkdir method."""
-    with patch("pathlib.Path.mkdir") as mock_mkdir:
-        yield mock_mkdir
-
-
-@pytest.fixture
-def mock_touch() -> Generator[MagicMock]:
-    """Mock the Path.touch() method."""
-    with patch("pathlib.Path.touch") as mock_touch:
-        yield mock_touch
-
-
-@pytest.fixture
-def mock_read_text() -> Generator[MagicMock]:
-    """Mock the Path.read_text() method."""
-    with patch("pathlib.Path.read_text") as mock_read:
-        yield mock_read
-
-
-@pytest.fixture
-def mock_write_text() -> Generator[MagicMock]:
-    """Mock the Path.write_text() method."""
-    with patch("pathlib.Path.write_text") as mock_write:
-        yield mock_write
-
-
-@pytest.fixture
-def mock_tmp_config_path(tmp_path: Path) -> Path:
-    """Provide a temporary config file path."""
-    return tmp_path / "config.json"
-
-
-@pytest.fixture
-def mock_tmp_static_path(tmp_path: Path) -> Path:
-    """Provide a temporary static file path."""
-    return tmp_path / "static"
-
-
 @pytest.fixture
 def mock_tmp_db_path(tmp_path: Path) -> Path:
     """Provide a temporary database directory path."""
     return tmp_path / "data"
 
 
-# Template Server Configuration Models
 @pytest.fixture
-def mock_security_config_dict() -> dict:
-    """Provide a mock security configuration dictionary."""
-    return {
-        "hsts_max_age": 31536000,
-        "content_security_policy": "default-src 'self'",
-    }
+def mock_tmp_server_path(tmp_path: Path) -> Path:
+    """Provide a temporary server directory path."""
+    return tmp_path / "server"
 
 
 @pytest.fixture
-def mock_cors_config_dict() -> dict:
-    """Provide a mock CORS configuration dictionary."""
-    return {
-        "enabled": True,
-        "allow_origins": ["https://example.com"],
-        "allow_credentials": True,
-        "allow_methods": ["GET"],
-        "allow_headers": ["Content-Type", "X-API-Key"],
-        "expose_headers": ["X-Custom-Header"],
-        "max_age": 600,
-    }
+def mock_tmp_storage_path(mock_tmp_server_path: Path) -> Path:
+    """Provide a temporary storage directory path."""
+    return mock_tmp_server_path / "storage"
 
 
 @pytest.fixture
-def mock_rate_limit_config_dict() -> dict:
-    """Provide a mock rate limit configuration dictionary."""
-    return {
-        "enabled": False,
-        "rate_limit": "200/minute",
-        "storage_uri": "memory://",
-    }
+def mock_tmp_thumbnails_path(mock_tmp_storage_path: Path) -> Path:
+    """Provide a temporary thumbnails directory path."""
+    return mock_tmp_storage_path / ".thumbnails"
 
 
-@pytest.fixture
-def mock_certificate_config_dict() -> dict:
-    """Provide a mock certificate configuration dictionary."""
-    return {
-        "directory": "/path/to/certs",
-        "ssl_keyfile": "key.pem",
-        "ssl_certfile": "cert.pem",
-        "days_valid": 365,
-    }
-
-
-@pytest.fixture
-def mock_json_response_config_dict() -> dict:
-    """Provide a mock JSON response configuration dictionary."""
-    return {
-        "ensure_ascii": False,
-        "allow_nan": False,
-        "indent": None,
-        "media_type": "application/json; charset=utf-8",
-    }
-
-
+# Cloud Server Configuration Models
 @pytest.fixture
 def mock_db_config_dict(mock_tmp_db_path: Path) -> dict:
     """Provide a mock database configuration dictionary."""
     return {
         "db_directory": mock_tmp_db_path,
+        "files_metadata_db_filename": "files_metadata.db",
     }
 
 
 @pytest.fixture
-def mock_security_config(mock_security_config_dict: dict) -> SecurityConfigModel:
-    """Provide a mock SecurityConfigModel instance."""
-    return SecurityConfigModel.model_validate(mock_security_config_dict)
+def mock_storage_config_dict() -> dict:
+    """Provide a mock storage configuration dictionary."""
+    return {
+        "upload_chunk_size_kb": 8,
+        "max_file_size_mb": 100,
+        "thumbnail_size": (10, 10),
+    }
 
 
 @pytest.fixture
-def mock_cors_config(mock_cors_config_dict: dict) -> CORSConfigModel:
-    """Provide a mock CORSConfigModel instance."""
-    return CORSConfigModel.model_validate(mock_cors_config_dict)
+def mock_db_config(mock_db_config_dict: dict) -> ServerDatabaseConfig:
+    """Provide a mock ServerDatabaseConfig instance."""
+    return ServerDatabaseConfig.model_validate(mock_db_config_dict)  # type: ignore[no-any-return]
 
 
 @pytest.fixture
-def mock_rate_limit_config(mock_rate_limit_config_dict: dict) -> RateLimitConfigModel:
-    """Provide a mock RateLimitConfigModel instance."""
-    return RateLimitConfigModel.model_validate(mock_rate_limit_config_dict)
+def mock_storage_config(mock_storage_config_dict: dict) -> StorageConfig:
+    """Provide a mock StorageConfig instance."""
+    return StorageConfig.model_validate(mock_storage_config_dict)
 
 
 @pytest.fixture
-def mock_certificate_config(mock_certificate_config_dict: dict) -> CertificateConfigModel:
-    """Provide a mock CertificateConfigModel instance."""
-    return CertificateConfigModel.model_validate(mock_certificate_config_dict)
-
-
-@pytest.fixture
-def mock_json_response_config(mock_json_response_config_dict: dict) -> JSONResponseConfigModel:
-    """Provide a mock JSONResponseConfigModel instance."""
-    return JSONResponseConfigModel.model_validate(mock_json_response_config_dict)
-
-
-@pytest.fixture
-def mock_db_config(mock_db_config_dict: dict) -> DatabaseConfig:
-    """Provide a mock DatabaseConfig instance."""
-    return DatabaseConfig.model_validate(mock_db_config_dict)
-
-
-@pytest.fixture
-def mock_template_server_config(
-    mock_security_config: SecurityConfigModel,
-    mock_cors_config: CORSConfigModel,
-    mock_rate_limit_config: RateLimitConfigModel,
-    mock_certificate_config: CertificateConfigModel,
-    mock_json_response_config: JSONResponseConfigModel,
-) -> TemplateServerConfig:
-    """Provide a mock TemplateServerConfig instance."""
-    return TemplateServerConfig(
-        security=mock_security_config,
-        cors=mock_cors_config,
-        rate_limit=mock_rate_limit_config,
-        certificate=mock_certificate_config,
-        json_response=mock_json_response_config,
+def mock_cloud_server_config(
+    mock_db_config: ServerDatabaseConfig,
+    mock_storage_config: StorageConfig,
+) -> CloudServerConfig:
+    """Provide a mock CloudServerConfig instance."""
+    return CloudServerConfig(
+        db=mock_db_config,
+        storage_config=mock_storage_config,
     )
+
+
+# Database fixtures
+@pytest.fixture
+def mock_files_metadata_database_manager(
+    mock_db_config: ServerDatabaseConfig,
+    mock_file_metadata: FileMetadata,
+    mock_image_metadata: FileMetadata,
+    mock_video_metadata: FileMetadata,
+) -> Generator[FilesMetadataDatabaseManager]:
+    """Provide a FilesMetadataDatabaseManager instance for testing."""
+    db_manager = FilesMetadataDatabaseManager()
+    db_manager.configure(db_config=mock_db_config)
+    pooled_engine = db_manager.engine
+    db_manager.engine = create_engine(pooled_engine.url, poolclass=NullPool)
+    pooled_engine.dispose()
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_file_metadata)
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_image_metadata)
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_video_metadata)
+    yield db_manager
+    db_manager.engine.dispose()
+
+
+# File Models
+@pytest.fixture
+def mock_text_file(mock_tmp_storage_path: Path) -> Path:
+    """Create a mock text file in the storage directory."""
+    text_file = mock_tmp_storage_path / "test_file.txt"
+    text_file.parent.mkdir(parents=True, exist_ok=True)
+    text_file.write_text("fake text data")
+    return text_file
+
+
+@pytest.fixture
+def mock_image_file(mock_tmp_storage_path: Path, mock_storage_config: StorageConfig) -> Path:
+    """Create a mock image file in the storage directory."""
+    image_file = mock_tmp_storage_path / "test_image.jpg"
+    image_file.parent.mkdir(parents=True, exist_ok=True)
+
+    img = Image.new("RGB", mock_storage_config.thumbnail_size, color=(255, 0, 0))
+    img.save(image_file, format="JPEG")
+    return image_file
+
+
+@pytest.fixture
+def mock_video_file(
+    mock_tmp_storage_path: Path, mock_storage_config: StorageConfig, mock_image_array: np.ndarray
+) -> Path:
+    """Create a mock video file in the storage directory."""
+    video_file = mock_tmp_storage_path / "test_video.mp4"
+    video_file.parent.mkdir(parents=True, exist_ok=True)
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # type: ignore[attr-defined]
+    out = cv2.VideoWriter(str(video_file), fourcc, 30.0, mock_storage_config.thumbnail_size)
+
+    for _ in range(10):
+        out.write(mock_image_array)
+
+    out.release()
+    return video_file
+
+
+@pytest.fixture
+def mock_file_metadata(mock_text_file: Path) -> FileMetadata:
+    """Provide a mock FileMetadata instance."""
+    return FileMetadata(
+        id=None,
+        filename=mock_text_file.name,
+        parent_directory=Path("."),
+        mime_type="text/plain",
+        size=1024,
+    )
+
+
+@pytest.fixture
+def mock_image_metadata(mock_image_file: Path) -> FileMetadata:
+    """Provide a FileMetadata instance for a mock image file."""
+    return FileMetadata(
+        id=None,
+        filename=mock_image_file.name,
+        parent_directory=Path("."),
+        mime_type="image/jpeg",
+        size=1024,
+    )
+
+
+@pytest.fixture
+def mock_video_metadata(mock_video_file: Path) -> FileMetadata:
+    """Provide a FileMetadata instance for a mock video file."""
+    return FileMetadata(
+        id=None,
+        filename=mock_video_file.name,
+        parent_directory=Path("."),
+        mime_type="video/mp4",
+        size=2048,
+    )
+
+
+# Thumbnail fixtures
+@pytest.fixture
+def mock_image_array(mock_storage_config: StorageConfig) -> np.ndarray:
+    """Provide a mock image array for video thumbnail generation."""
+    return rng.integers(0, 256, (*mock_storage_config.thumbnail_size, 3), dtype=np.uint8)
+
+
+@pytest.fixture
+def mock_image(mock_storage_config: StorageConfig) -> Image.Image:
+    """Mock image."""
+    mock_img = MagicMock(spec=Image.Image)
+    mock_img.copy.return_value = mock_img
+    mock_img.mode = "RGB"
+    mock_img.size = mock_storage_config.thumbnail_size
+    mock_img.convert.return_value = mock_img
+    mock_img.thumbnail = MagicMock()
+
+    def mock_save(path: Path, *args: object, **kwargs: object) -> None:
+        """Create a file when save is called."""
+        Path(path).touch()
+
+    mock_img.save = mock_save
+    return mock_img
+
+
+@pytest.fixture
+def mock_image_open(mock_image: Image.Image) -> Generator[MagicMock]:
+    """Mock PIL.Image.open to return a mock image."""
+    mock_context = MagicMock()
+    mock_context.__enter__.return_value = mock_image
+    mock_context.__exit__.return_value = None
+
+    with patch("PIL.Image.open", return_value=mock_context) as mock_open:
+        yield mock_open
+
+
+@pytest.fixture
+def mock_image_fromarray(mock_image: Image.Image) -> Generator[MagicMock]:
+    """Mock PIL.Image.fromarray to return a mock image."""
+    with patch("PIL.Image.fromarray", return_value=mock_image) as mock_fromarray:
+        yield mock_fromarray
+
+
+@pytest.fixture
+def mock_video_capture(mock_image_array: np.ndarray) -> Generator[MagicMock]:
+    """Mock cv2.VideoCapture for video thumbnail generation."""
+    mock_video = MagicMock()
+    mock_video.isOpened.return_value = True
+    mock_video.get.return_value = 30.0
+    mock_video.read.return_value = (True, mock_image_array)
+
+    with patch("cv2.VideoCapture", return_value=mock_video) as mock_cap:
+        yield mock_cap
+
+
+@pytest.fixture
+def mock_cv2_cvtcolor(mock_image_array: np.ndarray) -> Generator[MagicMock]:
+    """Mock cv2.cvtColor for color conversion."""
+    with patch("cv2.cvtColor", return_value=mock_image_array) as mock_cvt:
+        yield mock_cvt
+
+
+@pytest.fixture
+def mock_thumbnail_generator(mock_tmp_thumbnails_path: Path) -> ThumbnailGenerator:
+    """Provide a ThumbnailGenerator instance for testing."""
+    return ThumbnailGenerator(thumbnails_directory=mock_tmp_thumbnails_path)
 
 
 # Server fixtures
@@ -202,12 +269,24 @@ def mock_limiter() -> Limiter:
 
 
 @pytest.fixture
-def mock_template_server_router(mock_limiter: Limiter) -> TemplateServerRouter:
-    """Provide a TemplateServerRouter instance for testing."""
-    TEMPLATE_SERVER_ROUTER.configure(
+def mock_files_router(
+    mock_limiter: Limiter,
+    mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
+    mock_tmp_storage_path: Path,
+    mock_storage_config: StorageConfig,
+    mock_thumbnail_generator: ThumbnailGenerator,
+) -> FilesRouter:
+    """Provide a FilesRouter instance for testing."""
+    FILES_ROUTER.configure(
         hashed_token="hashed_value",  # noqa: S106
         limiter=mock_limiter,
         rate_limit="10/minute",
     )
-    TEMPLATE_SERVER_ROUTER.setup_routes()
-    return TEMPLATE_SERVER_ROUTER
+    FILES_ROUTER.setup_routes()
+    FILES_ROUTER.configure_router(
+        db=mock_files_metadata_database_manager,
+        storage_directory=mock_tmp_storage_path,
+        storage_config=mock_storage_config,
+        thumbnail_generator=mock_thumbnail_generator,
+    )
+    return FILES_ROUTER

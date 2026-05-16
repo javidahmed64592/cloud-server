@@ -1,36 +1,33 @@
 services:
-  # Python Template Server
-  python-template-server:
-    image: ${IMAGE:-ghcr.io/javidahmed64592/python-template-server:latest}
+  cloud-server:
+    # image: ${IMAGE:-ghcr.io/javidahmed64592/cloud-server:latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: python-template-server
+    container_name: cloud-server
     ports:
       - "${PORT:-443}:${PORT:-443}"
     environment:
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-443}
-      # Load API token hash from .env file (optional - will be generated if missing)
       - API_TOKEN_HASH=${API_TOKEN_HASH:-}
     volumes:
       - ./.env:/app/.env
-      - certs:/app/certs
-      - logs:/app/logs
+      - ./certs:/app/certs
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ${SERVER_DIRECTORY:-./server}:/app/server
     restart: unless-stopped
     healthcheck:
-      test:
-        [
+      test: [
           "CMD",
           "sh",
           "-c",
-          'python -c "import urllib.request; urllib.request.urlopen(''https://localhost:$PORT/api/health'', context=__import__(''ssl'')._create_unverified_context()).read()"',
+          'python -c "import urllib.request;
+          urllib.request.urlopen(''https://localhost:$PORT/api/health'',
+          context=__import__(''ssl'')._create_unverified_context()).read()"',
         ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-
-volumes:
-  certs:
-  logs:
