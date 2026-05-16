@@ -11,6 +11,7 @@ from cloud_server.db import FilesMetadataDatabaseManager
 from cloud_server.models import CloudServerConfig
 from cloud_server.routers import FilesRouter
 from cloud_server.server import CloudServer
+from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +33,7 @@ def mock_package_metadata() -> Generator[MagicMock]:
 def mock_server(
     mock_cloud_server_config: CloudServerConfig,
     mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
+    mock_thumbnail_generator: ThumbnailGenerator,
     mock_files_router: FilesRouter,
     mock_tmp_server_path: Path,
     mock_tmp_storage_path: Path,
@@ -40,6 +42,7 @@ def mock_server(
     with (
         patch("cloud_server.server.CloudServerConfig.save_to_file"),
         patch("cloud_server.server.FilesMetadataDatabaseManager", return_value=mock_files_metadata_database_manager),
+        patch("cloud_server.server.ThumbnailGenerator", return_value=mock_thumbnail_generator),
         patch("cloud_server.server.FilesRouter", return_value=mock_files_router),
         patch.object(CloudServer, "server_directory", new_callable=PropertyMock, return_value=mock_tmp_server_path),
         patch.object(CloudServer, "storage_directory", new_callable=PropertyMock, return_value=mock_tmp_storage_path),
