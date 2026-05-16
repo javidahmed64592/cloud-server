@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect } from "react";
 
 import type { FileMetadata } from "@/lib/types";
@@ -32,11 +33,16 @@ export default function FileViewer({
   const renderContent = () => {
     if (file.mime_type.startsWith("image/")) {
       return (
-        <img
-          src={blobUrl}
-          alt={file.filename}
-          className="max-h-[72vh] max-w-full rounded object-contain"
-        />
+        <div className="relative max-h-[72vh] max-w-full">
+          <Image
+            src={blobUrl}
+            alt={file.filename}
+            width={1920}
+            height={1080}
+            className="max-h-[72vh] max-w-full rounded object-contain"
+            unoptimized
+          />
+        </div>
       );
     }
     if (file.mime_type.startsWith("video/")) {

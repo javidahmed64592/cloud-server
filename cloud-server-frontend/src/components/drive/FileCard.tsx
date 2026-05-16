@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import type { FileMetadata } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -174,10 +176,13 @@ export default function FileCard({
       {/* Thumbnail/Icon area */}
       <div className="relative flex h-36 w-36 items-center justify-center rounded bg-background-tertiary">
         {thumbnail ? (
-          <img
+          <Image
             src={thumbnail}
             alt={file.filename}
+            width={144}
+            height={144}
             className="h-full w-full rounded object-cover"
+            unoptimized
           />
         ) : isMediaFile ? (
           // Thumbnail loading skeleton
