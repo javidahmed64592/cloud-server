@@ -99,6 +99,8 @@ def mock_cloud_server_config(
 def mock_files_metadata_database_manager(
     mock_db_config: ServerDatabaseConfig,
     mock_file_metadata: FileMetadata,
+    mock_image_metadata: FileMetadata,
+    mock_video_metadata: FileMetadata,
 ) -> Generator[FilesMetadataDatabaseManager]:
     """Provide a FilesMetadataDatabaseManager instance for testing."""
     db_manager = FilesMetadataDatabaseManager()
@@ -107,6 +109,8 @@ def mock_files_metadata_database_manager(
     db_manager.engine = create_engine(pooled_engine.url, poolclass=NullPool)
     pooled_engine.dispose()
     db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_file_metadata)
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_image_metadata)
+    db_manager.perform_file_metadata_action(DatabaseAction.CREATE, file_metadata=mock_video_metadata)
     yield db_manager
     db_manager.engine.dispose()
 
@@ -155,7 +159,7 @@ def mock_file_metadata(mock_text_file: Path) -> FileMetadata:
 def mock_image_metadata(mock_image_file: Path) -> FileMetadata:
     """Provide a FileMetadata instance for a mock image file."""
     return FileMetadata(
-        id=1,
+        id=None,
         filename=mock_image_file.name,
         parent_directory=Path("."),
         mime_type="image/jpeg",
@@ -167,7 +171,7 @@ def mock_image_metadata(mock_image_file: Path) -> FileMetadata:
 def mock_video_metadata(mock_video_file: Path) -> FileMetadata:
     """Provide a FileMetadata instance for a mock video file."""
     return FileMetadata(
-        id=2,
+        id=None,
         filename=mock_video_file.name,
         parent_directory=Path("."),
         mime_type="video/mp4",

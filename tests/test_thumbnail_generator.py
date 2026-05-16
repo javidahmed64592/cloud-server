@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 
 from PIL import Image
 
-from cloud_server.models import FileMetadata, StorageConfig
+from cloud_server.db.files_metadata_database_manager import FilesMetadataDatabaseManager
+from cloud_server.models import StorageConfig
 from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 
@@ -77,15 +78,19 @@ class TestThumbnailGenerator:
         mock_thumbnail_generator: ThumbnailGenerator,
         mock_tmp_storage_path: Path,
         mock_storage_config: StorageConfig,
-        mock_image_metadata: FileMetadata,
-        mock_video_metadata: FileMetadata,
+        mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
         mock_image_open: MagicMock,
         mock_image_fromarray: MagicMock,
         mock_video_capture: MagicMock,
         mock_cv2_cvtcolor: MagicMock,
     ) -> None:
         """Test synchronize_with_storage generates thumbnails for image and video files."""
-        files_metadata = [mock_image_metadata, mock_video_metadata]
+        files_metadata = [
+            file_metadata
+            for file_metadata in mock_files_metadata_database_manager.list_files()
+            if file_metadata.mime_type.startswith(("image/", "video/"))
+        ]
+        assert len(files_metadata) > 0
 
         mock_thumbnail_generator.synchronize_with_storage(
             storage_directory=mock_tmp_storage_path,
