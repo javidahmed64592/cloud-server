@@ -161,21 +161,3 @@ line-ending = "auto"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
-
-[tool.mypy]
-warn_unused_configs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_return_any = true
-warn_unreachable = true
-pretty = true
-
-[[tool.mypy.overrides]]
-module = [
-    "aiofiles.*",
-    "python_template_server.*",
-    "template_python.*",
-]
-ignore_missing_imports = true
