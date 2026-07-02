@@ -146,7 +146,7 @@ class FilesRouter(BaseRouter):
 
         return ListFilesResponse(
             message="Files metadata retrieved successfully.",
-            files_metadata=files_metadata,
+            files_metadata=files_metadata,  # ty:ignore[unknown-argument]
         )
 
     async def upload_file(self, request: Request, file: UploadFile, parent_directory: str) -> UploadFileResponse:
@@ -228,13 +228,13 @@ class FilesRouter(BaseRouter):
             self._thumbnail_generator.generate_thumbnail(
                 filepath=filepath,
                 mime_type=file_metadata.mime_type,
-                file_id=created_file_metadata.id,  # type: ignore[arg-type]
+                file_id=created_file_metadata.id,  # ty:ignore[invalid-argument-type]
                 thumbnail_size=self._storage_config.thumbnail_size,
             )
 
         return UploadFileResponse(
             message="File uploaded successfully.",
-            file_metadata=created_file_metadata,
+            file_metadata=created_file_metadata,  # ty:ignore[unknown-argument]
         )
 
     async def get_file(self, request: Request, file_id: int) -> FileResponse:
@@ -299,7 +299,7 @@ class FilesRouter(BaseRouter):
 
         return DeleteFileResponse(
             message="File deleted successfully.",
-            file_metadata=file_metadata,
+            file_metadata=file_metadata,  # ty:ignore[unknown-argument]
         )
 
     async def update_file_metadata(
@@ -365,7 +365,7 @@ class FilesRouter(BaseRouter):
 
         return UpdateFileMetadataResponse(
             message="File metadata updated successfully.",
-            file_metadata=updated_file_metadata,
+            file_metadata=updated_file_metadata,  # ty:ignore[unknown-argument]
         )
 
     async def get_thumbnail(self, request: Request, file_id: int) -> FileResponse:
@@ -384,7 +384,7 @@ class FilesRouter(BaseRouter):
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg) from e
 
-        thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # type: ignore[arg-type]
+        thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # ty:ignore[invalid-argument-type]
 
         return FileResponse(
             path=thumbnail_path,

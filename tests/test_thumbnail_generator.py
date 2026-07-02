@@ -33,7 +33,7 @@ class TestThumbnailGenerator:
         """Test image thumbnail generation."""
         thumbnail_img = mock_thumbnail_generator._generate_image_thumbnail(mock_image_file)
         mock_image_open.assert_called_once_with(mock_image_file)
-        mock_image.copy.assert_called_once()  # type: ignore[attr-defined]
+        mock_image.copy.assert_called_once()  # ty:ignore[unresolved-attribute]
         assert thumbnail_img == mock_image
 
     def test_generate_video_thumbnail(
@@ -70,7 +70,7 @@ class TestThumbnailGenerator:
         )
 
         mock_image_open.assert_called_once_with(mock_image_file)
-        mock_image.thumbnail.assert_called_once_with(thumbnail_size, Image.Resampling.LANCZOS)  # type: ignore[attr-defined]
+        mock_image.thumbnail.assert_called_once_with(thumbnail_size, Image.Resampling.LANCZOS)  # ty:ignore[unresolved-attribute]
         assert expected_path.exists()
 
     def test_synchronize_with_storage(

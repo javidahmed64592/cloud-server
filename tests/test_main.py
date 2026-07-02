@@ -23,4 +23,4 @@ class TestRun:
         """Test successful server run."""
         run()
 
-        mock_server_class.return_value.run.assert_called_once()
+        mock_server_class.return_value.run.assert_called_once()  # ty:ignore[unresolved-attribute]

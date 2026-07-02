@@ -181,7 +181,7 @@ class TestUpdateFileMetadataEndpoint:
 
             update_request = UpdateFileMetadataRequest(
                 filename=f"updated_{file_metadata.filename}",
-                parent_directory=file_metadata.parent_directory / "updated_directory",  # type: ignore[call-arg]
+                parent_directory=file_metadata.parent_directory / "updated_directory",  # ty:ignore[unknown-argument]
             )
 
             response = asyncio.run(mock_files_router.update_file_metadata(mock_request_object, file_id, update_request))
