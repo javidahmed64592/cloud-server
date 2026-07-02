@@ -77,7 +77,7 @@ uv run generate-new-token        # Generate API key, save hash to .env
 # Development
 uv run python-template-server    # Start server (https://localhost:443/api)
 uv run -m pytest                 # Run tests with coverage
-uv run -m mypy .                 # Type checking
+uv run -m ty check .             # Type checking
 uv run -m ruff check .           # Linting
 
 # Docker Development
@@ -150,7 +150,7 @@ All PRs must pass:
 
 1. `validate-pyproject` - pyproject.toml schema validation
 2. `ruff` - linting (120 char line length, strict rules in pyproject.toml)
-3. `mypy` - 100% type coverage (strict mode)
+3. `ty` - 100% type coverage (strict mode)
 4. `pytest` - 99% code coverage, HTML report uploaded
 5. `bandit` - security check for Python code
 6. `pip-audit` - audit dependencies for known vulnerabilities
