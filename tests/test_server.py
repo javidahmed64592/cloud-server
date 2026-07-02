@@ -54,13 +54,9 @@ def mock_server(
 class TestCloudServer:
     """Unit tests for the CloudServer class."""
 
-    def test_init(self, mock_server: CloudServer, mock_files_router: FilesRouter) -> None:
+    def test_init(self, mock_server: CloudServer) -> None:
         """Test CloudServer initialization."""
         assert isinstance(mock_server.config, CloudServerConfig)
-        for route in [
-            *mock_files_router.router.routes,
-        ]:
-            assert route in mock_server.app.routes
         assert isinstance(mock_server.files_metadata_database_manager, FilesMetadataDatabaseManager)
         assert mock_server.server_directory.exists()
         assert mock_server.storage_directory.exists()
@@ -76,3 +72,7 @@ class TestCloudServer:
         invalid_config = {"model": None}
         validated_config = mock_server.validate_config(invalid_config)
         assert isinstance(validated_config, CloudServerConfig)
+
+    def test_routers_property(self, mock_server: CloudServer, mock_files_router: FilesRouter) -> None:
+        """Test that the routers property returns the expected list of routers."""
+        assert mock_files_router in mock_server._routers
