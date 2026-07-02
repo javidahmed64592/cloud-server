@@ -281,7 +281,7 @@ docs = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
-    { name = "pillow", specifier = ">=12.2.0" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "python-template-server", git = "https://github.com/javidahmed64592/python-template-server.git" },
     { name = "python-template-server", extras = ["dev"], marker = "extra == 'dev'", git = "https://github.com/javidahmed64592/python-template-server.git" },
     { name = "python-template-server", extras = ["docs"], marker = "extra == 'docs'", git = "https://github.com/javidahmed64592/python-template-server.git" },
