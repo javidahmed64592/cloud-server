@@ -75,7 +75,7 @@ uv sync                          # Install dependencies
 uv run generate-new-token        # Generate API key, save hash to .env
 
 # Development
-uv run python-template-server    # Start server (https://localhost:443/api)
+uv run python-template-server    # Start server (http://localhost:8000/api)
 uv run -m pytest                 # Run tests with coverage
 uv run -m ty check .             # Type checking
 uv run -m ruff check .           # Linting
@@ -100,7 +100,7 @@ docker compose down              # Stop and remove containers
 - **Stage 2 (runtime)**: Installs wheel, copies configuration from host, copies static files and `.here` from installed package to /app
 - **Startup Script**: Created inline in Dockerfile as `/app/start.sh`, generates token if missing, starts server with host/port from environment variables
 - **Config Selection**: Uses `config.json` copied from host configuration directory
-- **Environment Variables**: `HOST` (default: 0.0.0.0), `PORT` (default: 443), `API_TOKEN_HASH` (auto-generated if not set)
+- **Environment Variables**: `HOST` (default: 0.0.0.0), `PORT` (default: 8000), `API_TOKEN_HASH` (auto-generated if not set)
 - **Health Check**: Python urllib request to `/api/health` with unverified SSL context (no auth required)
 - **Note**: No user switching - runs as root (could be security improvement)
 
@@ -180,8 +180,8 @@ All PRs must pass:
 
 ### Environment Variables
 
-- `HOST` - Server host address (default: localhost)
-- `PORT` - Server port (default: 443)
+- `HOST` - Server host address (default: 0.0.0.0)
+- `PORT` - Server port (default: 8000)
 - `API_TOKEN_HASH` - SHA-256 hash of API token (auto-generated if not provided)
 
 ### Configuration Files
