@@ -36,7 +36,7 @@ class TestThumbnailGenerator:
         mock_image.copy.assert_called_once()  # ty:ignore[unresolved-attribute]
         assert thumbnail_img == mock_image
 
-    def test_generate_video_thumbnail(
+    def test_generate_video_thumbnail(  # noqa: PLR0917
         self,
         mock_thumbnail_generator: ThumbnailGenerator,
         mock_video_file: Path,
@@ -73,7 +73,7 @@ class TestThumbnailGenerator:
         mock_image.thumbnail.assert_called_once_with(thumbnail_size, Image.Resampling.LANCZOS)  # ty:ignore[unresolved-attribute]
         assert expected_path.exists()
 
-    def test_synchronize_with_storage(
+    def test_synchronize_with_storage(  # noqa: PLR0917
         self,
         mock_thumbnail_generator: ThumbnailGenerator,
         mock_tmp_storage_path: Path,

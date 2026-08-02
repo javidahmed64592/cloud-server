@@ -30,7 +30,7 @@ def mock_package_metadata() -> Generator[MagicMock]:
 
 
 @pytest.fixture
-def mock_server(
+def mock_server(  # noqa: PLR0917
     mock_cloud_server_config: CloudServerConfig,
     mock_files_metadata_database_manager: FilesMetadataDatabaseManager,
     mock_thumbnail_generator: ThumbnailGenerator,

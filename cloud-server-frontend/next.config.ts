@@ -2,28 +2,18 @@ import type { NextConfig } from "next";
 import fs from "fs";
 import path from "path";
 
-// Type for reading the backend config.json
-interface BackendConfig {
-  server: {
-    host: string;
-    port: number;
-  };
-}
-
-// Read backend config to get host and port
+// Read environment file to get host and port
 const getBackendURL = () => {
   try {
-    const configPath = path.resolve(
-      __dirname,
-      "..",
-      "configuration",
-      "config.json"
-    );
-    const configData = fs.readFileSync(configPath, "utf-8");
-    const config: BackendConfig = JSON.parse(configData);
-    return `https://${config.server.host}:${config.server.port}`;
+    const variablesPath = path.resolve(__dirname, "..", ".env");
+    const variables = fs.readFileSync(variablesPath, "utf-8");
+    const matchHost = variables.match(/^HOST=(.*)$/m);
+    const matchPort = variables.match(/^PORT=(.*)$/m);
+    const host = matchHost ? matchHost[1] : "localhost";
+    const port = matchPort ? matchPort[1] : "8000";
+    return `http://${host}:${port}`;
   } catch (error) {
-    return "https://localhost:443";
+    return "http://localhost:8000";
   }
 };
 

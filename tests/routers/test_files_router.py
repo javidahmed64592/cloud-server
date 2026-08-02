@@ -53,7 +53,7 @@ class TestUploadFileEndpoint:
         """Provide a mock Request object."""
         return MagicMock(spec=Request)
 
-    def test_upload_file(
+    def test_upload_file(  # noqa: PLR0917
         self,
         mock_files_router: FilesRouter,
         mock_request_object: Request,
@@ -181,7 +181,7 @@ class TestUpdateFileMetadataEndpoint:
 
             update_request = UpdateFileMetadataRequest(
                 filename=f"updated_{file_metadata.filename}",
-                parent_directory=file_metadata.parent_directory / "updated_directory",  # ty:ignore[unknown-argument]
+                parent_directory=file_metadata.parent_directory / "updated_directory",
             )
 
             response = asyncio.run(mock_files_router.update_file_metadata(mock_request_object, file_id, update_request))

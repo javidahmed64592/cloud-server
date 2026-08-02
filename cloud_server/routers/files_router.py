@@ -146,7 +146,7 @@ class FilesRouter(BaseRouter):
 
         return ListFilesResponse(
             message="Files metadata retrieved successfully.",
-            files_metadata=files_metadata,  # ty:ignore[unknown-argument]
+            files_metadata=files_metadata,
         )
 
     async def upload_file(self, request: Request, file: UploadFile, parent_directory: str) -> UploadFileResponse:
@@ -234,7 +234,7 @@ class FilesRouter(BaseRouter):
 
         return UploadFileResponse(
             message="File uploaded successfully.",
-            file_metadata=created_file_metadata,  # ty:ignore[unknown-argument]
+            file_metadata=created_file_metadata,
         )
 
     async def get_file(self, request: Request, file_id: int) -> FileResponse:
@@ -299,7 +299,7 @@ class FilesRouter(BaseRouter):
 
         return DeleteFileResponse(
             message="File deleted successfully.",
-            file_metadata=file_metadata,  # ty:ignore[unknown-argument]
+            file_metadata=file_metadata,
         )
 
     async def update_file_metadata(
@@ -365,7 +365,7 @@ class FilesRouter(BaseRouter):
 
         return UpdateFileMetadataResponse(
             message="File metadata updated successfully.",
-            file_metadata=updated_file_metadata,  # ty:ignore[unknown-argument]
+            file_metadata=updated_file_metadata,
         )
 
     async def get_thumbnail(self, request: Request, file_id: int) -> FileResponse:
