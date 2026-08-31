@@ -264,7 +264,8 @@ describe("MoveDialog", () => {
       />
     );
 
-    const heading = screen.getByText("Rename / Move");
+    // Use findByText to wait for dialog to be fully rendered before clicking
+    const heading = await screen.findByText("Rename / Move");
     await user.click(heading);
 
     expect(mockOnClose).not.toHaveBeenCalled();
