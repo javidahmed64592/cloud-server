@@ -91,7 +91,6 @@ class FilesRouter(BaseRouter):
             response_model=ListFilesResponse,
             methods=["GET"],
             limited=True,
-            authentication_required=True,
         )
         self.add_route(
             endpoint="/",
@@ -99,7 +98,6 @@ class FilesRouter(BaseRouter):
             response_model=UploadFileResponse,
             methods=["POST"],
             limited=True,
-            authentication_required=True,
         )
         self.add_route(
             endpoint="/{file_id}",
@@ -107,7 +105,6 @@ class FilesRouter(BaseRouter):
             response_model=None,
             methods=["GET"],
             limited=True,
-            authentication_required=True,
         )
         self.add_route(
             endpoint="/{file_id}",
@@ -115,7 +112,6 @@ class FilesRouter(BaseRouter):
             response_model=DeleteFileResponse,
             methods=["DELETE"],
             limited=True,
-            authentication_required=True,
         )
         self.add_route(
             endpoint="/{file_id}/metadata",
@@ -123,7 +119,6 @@ class FilesRouter(BaseRouter):
             response_model=UpdateFileMetadataResponse,
             methods=["PATCH"],
             limited=True,
-            authentication_required=True,
         )
         self.add_route(
             endpoint="/{file_id}/thumbnail",
@@ -131,7 +126,6 @@ class FilesRouter(BaseRouter):
             response_model=None,
             methods=["GET"],
             limited=True,
-            authentication_required=True,
         )
 
     async def list_files(self, request: Request) -> ListFilesResponse:
