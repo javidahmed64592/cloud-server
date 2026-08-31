@@ -277,11 +277,7 @@ def mock_files_router(
     mock_thumbnail_generator: ThumbnailGenerator,
 ) -> FilesRouter:
     """Provide a FilesRouter instance for testing."""
-    FILES_ROUTER.configure(
-        hashed_token="hashed_value",  # noqa: S106
-        limiter=mock_limiter,
-        rate_limit="10/minute",
-    )
+    FILES_ROUTER.configure(limiter=mock_limiter, rate_limit="10/minute")
     FILES_ROUTER.setup_routes()
     FILES_ROUTER.configure_router(
         db=mock_files_metadata_database_manager,

@@ -6,27 +6,14 @@ services:
       dockerfile: Dockerfile
     container_name: cloud-server
     ports:
-      - "127.0.0.1:${PORT:-8000}:${PORT:-8000}"
+      - "${PORT:-8000}:${PORT:-8000}"
     environment:
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-8000}
-      - API_TOKEN_HASH=${API_TOKEN_HASH:-}
+      - NGINX_PROXY_URL=${NGINX_PROXY_URL:-}
     volumes:
       - ./.env:/app/.env
       - ./logs:/app/logs
       - ./data:/app/data
       - ${SERVER_DIRECTORY:-./server}:/app/server
     restart: unless-stopped
-    healthcheck:
-      test: [
-          "CMD",
-          "sh",
-          "-c",
-          'python -c "import urllib.request;
-          urllib.request.urlopen(''http://localhost:$PORT/api/health'',
-          context=__import__(''ssl'')._create_unverified_context()).read()"',
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s

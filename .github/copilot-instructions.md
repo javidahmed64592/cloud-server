@@ -21,18 +21,9 @@ Developers extend `TemplateServer` to create application-specific servers (see `
 - Validated using Pydantic models in `models.py` (TemplateServerConfig hierarchy)
 - Subclasses override `validate_config()` to provide custom config models
 - Logging configured automatically on `logging_setup.py` import with rotating file handler
-- Environment variables stored in `.env` (HOST, PORT, API_TOKEN_HASH)
+- Environment variables stored in `.env` (HOST, PORT, NGINX_PROXY_URL)
 - CORS configuration: Enable cross-origin requests via `config.cors` settings
 - Static files: Served from `static/` directory using FastAPI's `StaticFiles` mounting with custom 404 handler
-
-### Authentication Architecture
-
-- **Token Generation**: `uv run generate-new-token` creates secure token + SHA-256 hash
-- **Hash Storage**: Only hash stored in `.env` (API_TOKEN_HASH), raw token shown once
-- **Token Loading**: `load_hashed_token()` loads hash from .env on server startup, stored in `TemplateServer.hashed_token`
-- **Verification Flow**: Request → `_verify_api_key()` dependency → `verify_token()` → hash comparison
-- **Health Endpoint**: `/api/health` does NOT require authentication, reports unhealthy if token not configured
-- Header: `X-API-Key` (defined in `constants.API_KEY_HEADER_NAME`)
 
 ### CORS Middleware
 
@@ -100,7 +91,7 @@ docker compose down              # Stop and remove containers
 - **Stage 2 (runtime)**: Installs wheel, copies configuration from host, copies static files and `.here` from installed package to /app
 - **Startup Script**: Created inline in Dockerfile as `/app/start.sh`, generates token if missing, starts server with host/port from environment variables
 - **Config Selection**: Uses `config.json` copied from host configuration directory
-- **Environment Variables**: `HOST` (default: 0.0.0.0), `PORT` (default: 8000), `API_TOKEN_HASH` (auto-generated if not set)
+  **Environment Variables**: `HOST` (default: 0.0.0.0), `PORT` (default: 8000), `NGINX_PROXY_URL` (set to your Nginx proxy URL)
 - **Health Check**: Python urllib request to `/api/health` with unverified SSL context (no auth required)
 - **Note**: No user switching - runs as root (could be security improvement)
 
@@ -171,7 +162,6 @@ All PRs must pass:
 
 - `template_server.py` - Base TemplateServer class with middleware/auth setup
 - `main.py` - ExampleServer implementation showing how to extend TemplateServer
-- `authentication_handler.py` - Token generation, hashing, verification
 - `certificate_handler.py` - Self-signed SSL certificate generation and loading
 - `logging_setup.py` - Logging configuration (executed on import)
 - `models.py` - All Pydantic models (config + responses)
@@ -182,11 +172,10 @@ All PRs must pass:
 
 - `HOST` - Server host address (default: 0.0.0.0)
 - `PORT` - Server port (default: 8000)
-- `API_TOKEN_HASH` - SHA-256 hash of API token (auto-generated if not provided)
+- `NGINX_PROXY_URL` - URL of the Nginx proxy (set to your Nginx proxy URL)
 
 ### Configuration Files
 
 - `configuration/config.json` - Server configuration (rate limiting, security, CORS, certificate, etc.)
-- `.env.example` - Template for environment variables (HOST, PORT, API_TOKEN_HASH)
-- `.env` - Environment variables including host, port, and API token hash (auto-created by generate-new-token or Docker startup script)
-- **Docker**: Startup script auto-generates token if .env doesn't exist or API_TOKEN_HASH is empty
+- `.env.example` - Template for environment variables (HOST, PORT, NGINX_PROXY_URL)
+- `.env` - Environment variables including host, port, and NGINX proxy URL

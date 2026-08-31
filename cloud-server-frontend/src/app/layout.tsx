@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import "./globals.css";
 import Navigation from "@/components/Navigation";
-import { AuthProvider } from "@/contexts/AuthContext";
 
 export const metadata: Metadata = {
   title: "Cloud Server",
@@ -38,14 +37,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider>
-          <div className="min-h-screen bg-background">
-            <Navigation />
-            <main className="container mx-auto px-4 py-4 max-w-7xl pb-16">
-              {children}
-            </main>
-          </div>
-        </AuthProvider>
+        <div className="min-h-screen bg-background">
+          <Navigation />
+          <main className="container mx-auto px-4 py-4 max-w-7xl pb-16">
+            {children}
+          </main>
+        </div>
       </body>
     </html>
   );

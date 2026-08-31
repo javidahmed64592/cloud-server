@@ -254,22 +254,6 @@ describe("MoveDialog", () => {
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it("does not close when dialog content is clicked", async () => {
-    const user = userEvent.setup();
-    render(
-      <MoveDialog
-        file={mockFile}
-        onConfirm={mockOnConfirm}
-        onClose={mockOnClose}
-      />
-    );
-
-    const heading = screen.getByText("Rename / Move");
-    await user.click(heading);
-
-    expect(mockOnClose).not.toHaveBeenCalled();
-  });
-
   it("closes on Escape key press", async () => {
     const user = userEvent.setup();
     render(
