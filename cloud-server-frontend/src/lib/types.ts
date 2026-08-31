@@ -6,18 +6,12 @@ export interface BaseResponse {
   timestamp: string;
 }
 
-// Authentication types
-export interface AuthContextType {
-  apiKey: string | null;
-  isAuthenticated: boolean;
-  login: (apiKey: string) => Promise<void>;
-  logout: () => void;
-}
-
 // Response types
 export interface HealthResponse extends BaseResponse {}
 
-export interface LoginResponse extends BaseResponse {}
+export interface GetAuthEnabledResponse extends BaseResponse {
+  auth_enabled: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // File models (mirrors cloud_server/models.py)

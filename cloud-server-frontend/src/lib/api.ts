@@ -1,13 +1,12 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
 
-import { getApiKey } from "@/lib/auth";
 import type {
   DeleteFileResponse,
   FileMetadata,
+  GetAuthEnabledResponse,
   HealthResponse,
   ListFilesResponse,
-  LoginResponse,
   UpdateFileMetadataRequest,
   UpdateFileMetadataResponse,
   UploadFileResponse,
@@ -34,20 +33,6 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
-
-// Add request interceptor to include API key
-api.interceptors.request.use(
-  config => {
-    const apiKey = getApiKey();
-    if (apiKey) {
-      config.headers["X-API-KEY"] = apiKey;
-    }
-    return config;
-  },
-  error => {
-    return Promise.reject(error);
-  }
-);
 
 // Health status type
 export type HealthStatus = "online" | "offline" | "checking";
@@ -90,13 +75,9 @@ export const getHealth = async (): Promise<HealthResponse> => {
   }
 };
 
-export const login = async (apiKey: string): Promise<LoginResponse> => {
+export const getAuthEnabled = async (): Promise<GetAuthEnabledResponse> => {
   try {
-    const response = await api.get<LoginResponse>("/login", {
-      headers: {
-        "X-API-KEY": apiKey,
-      },
-    });
+    const response = await api.get<GetAuthEnabledResponse>("/auth_enabled");
     return response.data;
   } catch (error) {
     throw new Error(extractErrorMessage(error));
