@@ -1,6 +1,7 @@
 """Cloud server router with file operations endpoints."""
 
 import logging
+import shutil
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -15,8 +16,11 @@ from cloud_server.db import FilesMetadataDatabaseManager
 from cloud_server.models import (
     DatabaseAction,
     DeleteFileResponse,
+    DeleteFolderResponse,
     FileMetadata,
     ListFilesResponse,
+    MoveFolderRequest,
+    MoveFolderResponse,
     StorageConfig,
     UpdateFileMetadataRequest,
     UpdateFileMetadataResponse,
@@ -83,8 +87,38 @@ class FilesRouter(BaseRouter):
         if temp_filepath and temp_filepath.exists():
             temp_filepath.unlink()
 
+    def _resolve_folder_path(self, path: str) -> Path:
+        """Validate and resolve a relative folder path, guarding against traversal."""
+        folder = Path(path)
+        if folder.is_absolute():
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail="Folder path must be relative.")
+        if str(folder) in (".", ""):
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail="Cannot operate on the root directory.")
+        storage = self._storage_directory.resolve()
+        resolved = (self._storage_directory / folder).resolve()
+        try:
+            resolved.relative_to(storage)
+        except ValueError as e:
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail="Invalid folder path.") from e
+        return folder
+
     def setup_routes(self) -> None:
         """Set up the API routes."""
+        self.add_route(
+            endpoint="/folders/",
+            handler_function=self.move_folder,
+            response_model=MoveFolderResponse,
+            methods=["PATCH"],
+            limited=True,
+        )
+        self.add_route(
+            endpoint="/folders/",
+            handler_function=self.delete_folder,
+            response_model=DeleteFolderResponse,
+            methods=["DELETE"],
+            limited=True,
+        )
+
         self.add_route(
             endpoint="/",
             handler_function=self.list_files,
@@ -126,6 +160,71 @@ class FilesRouter(BaseRouter):
             response_model=None,
             methods=["GET"],
             limited=True,
+        )
+
+    async def move_folder(self, request: Request, path: str, body: MoveFolderRequest) -> MoveFolderResponse:
+        """Rename or move a folder and update all contained file records.
+
+        :param Request request: The incoming HTTP request
+        :param str path: Current folder path relative to storage directory (query param)
+        :param MoveFolderRequest body: Request body containing the new folder path
+        :return MoveFolderResponse: Folder move response
+        :raises HTTPException: If path validation fails or the folder doesn't exist
+        """
+        old_folder = self._resolve_folder_path(path)
+        new_folder = self._resolve_folder_path(body.new_path)
+
+        old_dir = self._storage_directory / old_folder
+        new_dir = self._storage_directory / new_folder
+
+        if not old_dir.exists():
+            error_msg = f"Folder not found in storage: {path}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
+
+        if new_dir.exists():
+            error_msg = f"Folder already exists in storage: {body.new_path}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.CONFLICT, detail=error_msg)
+
+        count = self._db.rename_folder(str(old_folder), str(new_folder))
+        new_dir.parent.mkdir(parents=True, exist_ok=True)
+        old_dir.rename(new_dir)
+        logger.info("Moved folder from '%s' to '%s' (%d files updated)", path, body.new_path, count)
+
+        return MoveFolderResponse(
+            message=f"Folder moved from '{path}' to '{body.new_path}' successfully.",
+            files_updated=count,
+        )
+
+    async def delete_folder(self, request: Request, path: str) -> DeleteFolderResponse:
+        """Delete a folder and all its contents.
+
+        :param Request request: The incoming HTTP request
+        :param str path: Folder path relative to storage directory (query param)
+        :return DeleteFolderResponse: Folder deletion response
+        :raises HTTPException: If path validation fails or the folder doesn't exist
+        """
+        folder = self._resolve_folder_path(path)
+        folder_dir = self._storage_directory / folder
+
+        if not folder_dir.exists():
+            error_msg = f"Folder not found in storage: {path}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
+
+        deleted_files = self._db.delete_files_in_folder(str(folder))
+        for file_metadata in deleted_files:
+            thumbnail_path = self._thumbnail_generator.get_thumbnail_path(file_id=file_metadata.id)  # ty:ignore[invalid-argument-type]
+            if thumbnail_path.exists():
+                thumbnail_path.unlink()
+
+        shutil.rmtree(folder_dir)
+        logger.info("Deleted folder '%s' with %d files", path, len(deleted_files))
+
+        return DeleteFolderResponse(
+            message=f"Folder '{path}' deleted successfully.",
+            files_deleted=len(deleted_files),
         )
 
     async def list_files(self, request: Request) -> ListFilesResponse:

@@ -166,3 +166,79 @@ class TestFilesMetadataDatabaseManager:
         assert isinstance(files, list)
         assert len(files) > 0
         assert all(isinstance(file, FileMetadata) for file in files)
+
+    def test_rename_folder_updates_direct_files(
+        self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager
+    ) -> None:
+        """Test rename_folder updates parent_directory for files directly in the folder."""
+        entry = FileMetadata(filename="f.txt", parent_directory=Path("oldname"), mime_type="text/plain", size=1)
+        created = mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.CREATE, file_metadata=entry
+        )
+        count = mock_files_metadata_database_manager.rename_folder("oldname", "newname")
+        assert count == 1
+        updated = mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.READ, file_id=created.id
+        )
+        assert str(updated.parent_directory) == "newname"
+
+    def test_rename_folder_updates_nested_files(
+        self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager
+    ) -> None:
+        """Test rename_folder updates parent_directory for files in subfolders."""
+        entry = FileMetadata(filename="f.txt", parent_directory=Path("root/sub"), mime_type="text/plain", size=1)
+        created = mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.CREATE, file_metadata=entry
+        )
+        count = mock_files_metadata_database_manager.rename_folder("root", "moved")
+        assert count == 1
+        updated = mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.READ, file_id=created.id
+        )
+        assert str(updated.parent_directory) == "moved/sub"
+
+    def test_rename_folder_does_not_affect_unrelated_files(
+        self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager
+    ) -> None:
+        """Test rename_folder leaves files in other folders untouched."""
+        before = [str(f.parent_directory) for f in mock_files_metadata_database_manager.list_files()]
+        count = mock_files_metadata_database_manager.rename_folder("no_such_folder", "newname")
+        assert count == 0
+        after = [str(f.parent_directory) for f in mock_files_metadata_database_manager.list_files()]
+        assert before == after
+
+    def test_delete_files_in_folder_removes_records(
+        self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager
+    ) -> None:
+        """Test delete_files_in_folder removes all records under the folder."""
+        folder = "doomed"
+        for name in ("a.txt", "b.txt"):
+            mock_files_metadata_database_manager.perform_file_metadata_action(
+                DatabaseAction.CREATE,
+                file_metadata=FileMetadata(
+                    filename=name, parent_directory=Path(folder), mime_type="text/plain", size=1
+                ),
+            )
+        before = len(mock_files_metadata_database_manager.list_files())
+        deleted = mock_files_metadata_database_manager.delete_files_in_folder(folder)
+        assert len(deleted) == 2  # noqa: PLR2004
+        assert len(mock_files_metadata_database_manager.list_files()) == before - 2
+
+    def test_delete_files_in_folder_includes_subfolders(
+        self, mock_files_metadata_database_manager: FilesMetadataDatabaseManager
+    ) -> None:
+        """Test delete_files_in_folder also removes records in subfolders."""
+        mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.CREATE,
+            file_metadata=FileMetadata(
+                filename="root.txt", parent_directory=Path("parent"), mime_type="text/plain", size=1
+            ),
+        )
+        mock_files_metadata_database_manager.perform_file_metadata_action(
+            DatabaseAction.CREATE,
+            file_metadata=FileMetadata(
+                filename="sub.txt", parent_directory=Path("parent/child"), mime_type="text/plain", size=1
+            ),
+        )
+        deleted = mock_files_metadata_database_manager.delete_files_in_folder("parent")
+        assert len(deleted) == 2  # noqa: PLR2004
