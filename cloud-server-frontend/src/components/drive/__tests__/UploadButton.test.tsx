@@ -309,4 +309,82 @@ describe("UploadButton", () => {
       expect(screen.queryByText("First upload failed")).not.toBeInTheDocument();
     });
   });
+
+  it("renders folder upload button", () => {
+    render(<UploadButton currentPath={currentPath} onUpload={mockOnUpload} />);
+
+    expect(screen.getByRole("button", { name: /folder/i })).toBeInTheDocument();
+  });
+
+  it("has hidden folder input", () => {
+    const { container } = render(
+      <UploadButton currentPath={currentPath} onUpload={mockOnUpload} />
+    );
+
+    const inputs = container.querySelectorAll('input[type="file"]');
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1]).toHaveClass("hidden");
+    expect(inputs[1]).toHaveAttribute("multiple");
+  });
+
+  it("opens folder picker when folder button is clicked", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <UploadButton currentPath={currentPath} onUpload={mockOnUpload} />
+    );
+
+    const folderButton = screen.getByRole("button", { name: /folder/i });
+    const inputs = container.querySelectorAll('input[type="file"]');
+    const folderInput = inputs[1] as HTMLInputElement;
+    const clickSpy = jest.spyOn(folderInput, "click");
+
+    await user.click(folderButton);
+
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it("uploads folder files preserving directory structure", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <UploadButton currentPath={currentPath} onUpload={mockOnUpload} />
+    );
+
+    const inputs = container.querySelectorAll('input[type="file"]');
+    const folderInput = inputs[1] as HTMLInputElement;
+
+    const file1 = new File(["content1"], "file1.txt", { type: "text/plain" });
+    Object.defineProperty(file1, "webkitRelativePath", {
+      value: "myFolder/file1.txt",
+    });
+    const file2 = new File(["content2"], "file2.txt", { type: "text/plain" });
+    Object.defineProperty(file2, "webkitRelativePath", {
+      value: "myFolder/sub/file2.txt",
+    });
+
+    mockUploadFile
+      .mockResolvedValueOnce({
+        ...mockFileMetadata,
+        id: 1,
+        filename: "file1.txt",
+      })
+      .mockResolvedValueOnce({
+        ...mockFileMetadata,
+        id: 2,
+        filename: "file2.txt",
+      });
+
+    await user.upload(folderInput, [file1, file2]);
+
+    await waitFor(() => {
+      expect(mockUploadFile).toHaveBeenCalledWith(
+        file1,
+        `${currentPath}/myFolder`
+      );
+      expect(mockUploadFile).toHaveBeenCalledWith(
+        file2,
+        `${currentPath}/myFolder/sub`
+      );
+      expect(mockOnUpload).toHaveBeenCalledTimes(2);
+    });
+  });
 });
