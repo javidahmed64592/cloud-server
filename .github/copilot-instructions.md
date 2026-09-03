@@ -1,181 +1,341 @@
-# Python Template Server - AI Agent Instructions
+# Cloud Server - AI Agent Instructions
 
 ## Project Overview
 
-FastAPI-based template server providing reusable infrastructure for building secure HTTPS applications.
-Implements authentication, rate limiting, security headers, and observability foundations via a base `TemplateServer` class.
-Developers extend `TemplateServer` to create application-specific servers (see `ExampleServer` in `main.py`).
+A full-stack cloud file storage server with FastAPI backend and Next.js frontend. Built on `python-template-server` as foundation.
+Provides file upload/download, thumbnail generation, metadata management, and a modern web UI for browsing files.
+Backend extends `TemplateServer` from python-template-server, frontend is a React SPA with TypeScript.
 
 ## Architecture & Key Components
 
-### Application Factory Pattern
+### Full Stack Architecture
 
-- Entry: `main.py:run()` → instantiates `ExampleServer` (subclass of `TemplateServer`) → calls `.run()`
-- `TemplateServer.__init__()` sets up middleware, rate limiting, and calls `setup_routes()`
-- **Critical**: Middleware order matters - request logging → security headers → CORS → rate limiting
-- **Extensibility**: Subclasses implement `setup_routes()` to add custom endpoints and `validate_config()` for config validation
+- **Backend**: FastAPI server (`CloudServer` class) extending `python-template-server.TemplateServer`
+- **Frontend**: Next.js 16 + React 19 + TypeScript, built as static export and served by FastAPI
+- **Database**: SQLite for file metadata (SQLAlchemy ORM)
+- **Storage**: Local filesystem with thumbnail generation for images/videos
+- **Deployment**: Multi-stage Docker build (frontend → backend → runtime)
+
+### Backend Architecture (`cloud_server/`)
+
+**Entry Point**: `main.py:run()` → instantiates `CloudServer` (subclass of `TemplateServer`) → calls `.run()`
+
+**CloudServer Class** (`server.py`):
+
+- Extends `python-template-server.TemplateServer` for auth, rate limiting, CORS, security headers
+- Initializes storage directories (`server/storage/`, `server/storage/.thumbnails/`)
+- Configures `FilesMetadataDatabaseManager` for file metadata persistence
+- Synchronizes storage with database on startup
+- Generates thumbnails for existing files on startup
+
+**File Operations Router** (`routers/files_router.py`):
+
+- `GET /api/files/` - List all files with metadata
+- `POST /api/files/` - Upload file (chunked streaming, size validation)
+- `GET /api/files/{file_id}` - Download file
+- `DELETE /api/files/{file_id}` - Delete file and metadata
+- `PATCH /api/files/{file_id}/metadata` - Update file metadata (rename, move)
+- `GET /api/files/{file_id}/thumbnail` - Get thumbnail for images/videos
+
+**Thumbnail Generator** (`thumbnail_generator.py`):
+
+- Generates 200x200 thumbnails for images (PNG, JPG, GIF, WebP) using Pillow
+- Generates video thumbnails from first frame using OpenCV
+- Stores thumbnails in `.thumbnails/` subdirectory
+- Automatically syncs with storage on server startup
+
+**Database Manager** (`db/files_metadata_database_manager.py`):
+
+- SQLAlchemy ORM with SQLite backend
+- Stores file metadata: id, filename, parent_directory, mime_type, size, uploaded_at, updated_at
+- Synchronizes with storage directory (adds missing, removes orphaned)
+- CRUD operations for file metadata
+
+### Frontend Architecture (`cloud-server-frontend/`)
+
+**Framework**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS
+
+**Key Routes**:
+
+- `/` - Redirects to `/drive`
+- `/drive` - File browser interface (main app)
+- `/login` - Authentication page
+- `/not-found` - 404 page
+
+**State Management**:
+
+- `AuthContext` - Authentication state, API key management
+- Zustand (via `contexts/`) for client-side state
+
+**API Client** (`lib/api.ts`):
+
+- Axios-based client with error handling
+- Proxies to backend in dev, same-origin in production
+- Functions mirror backend routes: `listFiles()`, `uploadFile()`, `deleteFile()`, etc.
+
+**Key Components** (`components/`):
+
+- `Navigation` - App header with health indicator
+- `HealthIndicator` - Backend health status badge
+- `drive/FileGrid` - Grid view of files and folders
+- `drive/FileCard` - Individual file display with thumbnail
+- `drive/FolderCard` - Folder display
+- `drive/UploadButton` - File upload dialog
+- `drive/FileViewer` - File preview/download modal
+- `drive/MoveDialog` - Move/rename file dialog
+- `drive/Breadcrumb` - Directory navigation
+
+**Testing**: Jest + React Testing Library, 100% coverage goal
 
 ### Configuration System
 
-- `config.json` loaded via `TemplateServer.load_config()` method
-- Validated using Pydantic models in `models.py` (TemplateServerConfig hierarchy)
-- Subclasses override `validate_config()` to provide custom config models
-- Logging configured automatically on `logging_setup.py` import with rotating file handler
-- Environment variables stored in `.env` (HOST, PORT, NGINX_PROXY_URL)
-- CORS configuration: Enable cross-origin requests via `config.cors` settings
-- Static files: Served from `static/` directory using FastAPI's `StaticFiles` mounting with custom 404 handler
+**Backend Config** (`configuration/config.json`):
 
-### CORS Middleware
+```json
+{
+  "security": {...},           // HSTS, CSP headers
+  "cors": {...},              // CORS settings (enabled for frontend)
+  "rate_limit": {...},        // Rate limiting (100/minute)
+  "json_response": {...},     // JSON serialization
+  "db": {
+    "db_directory": "data",
+    "files_metadata_db_filename": "files_metadata.db"
+  },
+  "storage_config": {
+    "upload_chunk_size_kb": 8,
+    "max_file_size_mb": 2000,
+    "thumbnail_size": [200, 200]
+  }
+}
+```
 
-- Optional cross-origin resource sharing support via FastAPI's `CORSMiddleware`
-- Controlled by `config.cors.enabled` flag (disabled by default)
-- Configurable origins, methods, headers, credentials, and preflight cache duration
-- When enabled, logs configuration details (origins, credentials, methods, headers)
-- Typical use: Allow frontend applications on different domains to access the API
+**Environment Variables** (`.env`):
 
-### Rate Limiting
+- `HOST` - Server host (default: 0.0.0.0)
+- `PORT` - Server port (default: 8000)
+- `NGINX_PROXY_URL` - Optional Nginx proxy URL
 
-- Uses `slowapi` with configurable storage (in-memory/Redis/Memcached)
-- Applied via `_limit_route()` wrapper when `config.rate_limit.enabled=true`
-- Custom exception handler increments `rate_limit_exceeded_counter` per endpoint
-- Format: `"100/minute"` (supports /second, /minute, /hour)
+### Docker Multi-Stage Build
 
-### Static File Serving
+**Stage 1 (frontend-builder)**:
 
-- Serves static files from `static/` directory using FastAPI's `StaticFiles` class (configurable via `STATIC_DIR` constant)
-- Automatically mounts `StaticFiles` at root (`/`) when `static_dir_exists=True` with `html=True` parameter
-- **Custom 404 Handler**: Exception handler intercepts 404 errors to serve custom `404.html` if present
-- **Routing Logic**: StaticFiles handles exact files and directory index.html → 404 exception handler serves 404.html → HTTP 404 error
-- **No Authentication**: Static files served without API key verification
-- **No Rate Limiting**: Static file mounting excludes rate limiting for performance
-- **Implementation**: `app.mount("/", StaticFiles(directory=str(self.static_dir), html=True), name="static")`
-- Use case: Serve Single Page Applications (SPAs) alongside the API
+- Node 25 Alpine base
+- Builds Next.js static export to `out/` directory
+- All frontend assets become static HTML/CSS/JS
 
-### Observability Stack
+**Stage 2 (backend-builder)**:
 
-- **Logging**: Dual output (console + rotating file), 10MB per file, 5 backups in `logs/`
-- **Request Tracking**: `RequestLoggingMiddleware` logs all requests with client IP
+- Python 3.13 slim base
+- Installs `uv` for dependency management
+- Builds Python wheel from `cloud_server/` source
+- Copies built frontend from Stage 1 to `static/` directory
+
+**Stage 3 (runtime)**:
+
+- Python 3.13 slim base
+- Installs wheel + dependencies via `uv`
+- Copies configuration, sets up entrypoint
+- Health check: `curl -k https://localhost:8000/api/health`
 
 ## Developer Workflows
 
 ### Essential Commands
 
-```powershell
+**Backend Development**:
+
+```bash
 # Setup (first time)
-uv sync                          # Install dependencies
-uv run generate-new-token        # Generate API key, save hash to .env
+uv sync                          # Install Python dependencies
+uv run generate-new-token        # Generate API key for testing
 
 # Development
-uv run python-template-server    # Start server (http://localhost:8000/api)
-uv run -m pytest                 # Run tests with coverage
+uv run cloud-server              # Start backend server (http://localhost:8000)
+uv run -m pytest                 # Run backend tests with coverage
 uv run -m ty check .             # Type checking
 uv run -m ruff check .           # Linting
+```
 
-# Docker Development
-docker compose up --build -d     # Build + start all services
-docker compose logs -f python-template-server  # View logs
-docker compose down              # Stop and remove containers
+**Frontend Development**:
+
+```bash
+cd cloud-server-frontend
+npm install                      # Install dependencies
+npm run dev                      # Start dev server (http://localhost:3000)
+npm test                         # Run tests
+npm run test:coverage            # Run tests with coverage
+npm run type-check               # TypeScript checking
+npm run lint                     # ESLint
+npm run format                   # Prettier
+npm run quality                  # All quality checks
+```
+
+**Docker Development**:
+
+```bash
+docker compose up --build -d     # Build + start container
+docker compose logs -f cloud-server  # View logs
+docker compose down              # Stop and remove container
 ```
 
 ### Testing Patterns
 
+**Backend Tests** (`tests/`):
+
 - **Fixtures**: All tests use `conftest.py` fixtures, auto-mock `pyhere.here()` to tmp_path
 - **Config Mocking**: Use fixtures for consistent test config
-- **Integration Tests**: Test via FastAPI TestClient with auth headers
-- **Coverage Target**: 99% (currently achieved)
-- **Pattern**: Unit tests per module (test\_\*.py) + integration tests (test_template_server.py)
+- **Integration Tests**: FastAPI TestClient with auth headers
+- **Coverage Target**: 80% (configured in pyproject.toml)
+- **Pattern**: Unit tests per module (test\_\*.py) + integration tests (test_server.py)
 
-### Docker Multi-Stage Build
+**Frontend Tests** (`cloud-server-frontend/src/**/__tests__/`):
 
-- **Stage 1 (backend-builder)**: Uses `uv` to build wheel with pyproject.toml, source code, and metadata files
-- **Stage 2 (runtime)**: Installs wheel, copies configuration from host, copies static files and `.here` from installed package to /app
-- **Startup Script**: Created inline in Dockerfile as `/app/start.sh`, generates token if missing, starts server with host/port from environment variables
-- **Config Selection**: Uses `config.json` copied from host configuration directory
-  **Environment Variables**: `HOST` (default: 0.0.0.0), `PORT` (default: 8000), `NGINX_PROXY_URL` (set to your Nginx proxy URL)
-- **Health Check**: Python urllib request to `/api/health` with unverified SSL context (no auth required)
-- **Note**: No user switching - runs as root (could be security improvement)
+- **Framework**: Jest + React Testing Library + jest-dom
+- **Mocking**: Mock API calls with Jest
+- **Coverage**: 100% goal, HTML reports in `coverage/`
+- **Pattern**: Component tests in `__tests__/` subdirectories
 
-## Project-Specific Conventions
+### Project-Specific Conventions
 
-### Code Organization
+**Backend Code Organization**:
 
-- **Handlers**: Separate modules for auth (`authentication_handler.py`), certs (`certificate_handler.py`)
-- **Middleware**: Dedicated package `middleware/` with base classes extending `BaseHTTPMiddleware`
-- **Constants**: All magic strings/numbers in `constants.py` (ports, file names, log config, static directory)
-- **Models**: Pydantic models for config + API responses, use `@property` for derived values
-- **Static Files**: Optional `static/` directory for serving SPAs or static assets
+- `server.py` - CloudServer class (main server)
+- `main.py` - Entry point and CLI
+- `models.py` - Pydantic models (config + API responses)
+- `routers/` - FastAPI routers (files_router.py)
+- `db/` - Database managers (SQLAlchemy)
+- `thumbnail_generator.py` - Image/video thumbnail generation
+
+**Frontend Code Organization**:
+
+- `src/app/` - Next.js pages (App Router)
+- `src/components/` - React components
+- `src/lib/` - API client and utilities
+- `src/contexts/` - React context providers
+
+**API Design**:
+
+- **Prefix**: All routes under `/api`
+- **Authentication**: API key via `X-API-Key` header (inherited from template server)
+- **Response Models**: All endpoints return `BaseResponse` subclasses with code/message/timestamp
+- **File Upload**: Chunked streaming (8KB chunks), size validation (max 2GB)
+- **Error Handling**: HTTPException with proper status codes
+
+**Database Patterns**:
+
+- **ORM**: SQLAlchemy with declarative models
+- **Timestamps**: Unix timestamps (integers) for uploaded_at/updated_at
+- **Paths**: Store relative paths from storage root, compute absolute at runtime
+- **Sync**: Database synchronized with filesystem on startup
+
+**Thumbnail Generation**:
+
+- **Images**: Pillow with LANCZOS resampling, preserve aspect ratio
+- **Videos**: OpenCV extracts first frame, then Pillow for resize
+- **Storage**: `.thumbnails/` subdirectory with same structure as storage
+- **Formats**: Always output as PNG for consistency
+- **Async**: Generated during upload, served as FileResponse
 
 ### Security Patterns
 
-- **Never log secrets**: Print tokens via `print()`, not `logger` (see `generate_new_token()`)
-- **Path validation**: Use Pydantic validators, Path objects for cert paths
-- **Security headers**: HSTS, CSP, X-Frame-Options via `SecurityHeadersMiddleware`
-- **Cert generation**: RSA-4096, SHA-256, 365-day validity, SANs for localhost
-
-### API Design
-
-- **Prefix**: All routes under `/api` (API_PREFIX constant)
-- **Authentication**: Applied via `dependencies=[Security(self._verify_api_key)]` in route registration
-- **Response Models**: All endpoints return `BaseResponse` subclasses with code/message/timestamp
-- **Health Status**: `/health` includes `status` field (HEALTHY/DEGRADED/UNHEALTHY), reports unhealthy if no token configured
+- **Never log secrets**: Print tokens via `print()`, not `logger`
+- **Path validation**: Use Pydantic validators, Path objects
+- **Security headers**: HSTS, CSP, X-Frame-Options (inherited from template server)
+- **API authentication**: SHA-256 hashed tokens with X-API-Key header
+- **CORS**: Enabled for frontend, configurable origins
+- **File validation**: Size limits, MIME type detection
 
 ### Logging Format
 
 - Format: `[DD/MM/YYYY | HH:MM:SS] (LEVEL) module: message`
-- Client IPs logged in requests: `"Request: GET /api/health from 192.168.1.1"`
-- Auth failures: `"Invalid API key attempt!"`
+- Request tracking: `"Request: GET /api/files/ from 192.168.1.1"`
+- File operations: `"Uploaded file: example.jpg (1.5 MB)"`
+- Database sync: `"Synchronized 42 files metadata entries with storage directory."`
 
 ## Development Constraints
 
-### Testing Requirements
+### Backend Testing Requirements
 
-- Use fixtures for TemplateServer/ExampleServer instantiation
+- Use fixtures for CloudServer instantiation
 - Test async endpoints with `@pytest.mark.asyncio`
-- Mock `uvicorn.run` when testing server `.run()` methods
+- Mock file I/O operations for unit tests
+- Test thumbnail generation with sample images/videos
+- Verify database synchronization logic
+
+### Frontend Testing Requirements
+
+- Mock all API calls with Jest
+- Test user interactions with @testing-library/user-event
+- Test async state updates and loading states
+- Test error handling and toast notifications
+- Verify routing and navigation
 
 ### CI/CD Validation
 
 All PRs must pass:
 
-**CI Workflow (ci.yml):**
+**Backend CI**:
 
 1. `validate-pyproject` - pyproject.toml schema validation
-2. `ruff` - linting (120 char line length, strict rules in pyproject.toml)
+2. `ruff` - linting (120 char line length)
 3. `ty` - 100% type coverage (strict mode)
-4. `pytest` - 99% code coverage, HTML report uploaded
-5. `bandit` - security check for Python code
-6. `pip-audit` - audit dependencies for known vulnerabilities
-7. `version-check` - pyproject.toml vs uv.lock version consistency
+4. `pytest` - 80% code coverage
+5. `bandit` - security scanning
+6. `pip-audit` - dependency vulnerability audit
 
-**Build Workflow (build.yml):**
+**Frontend CI**:
 
-1. `build-wheel` - Create and upload Python wheel package
-2. `verify-structure` - Verify installed package structure and required files
+1. `type-check` - TypeScript validation
+2. `lint` - ESLint
+3. `format` - Prettier
+4. `test` - Jest with coverage
 
-**Docker Workflow (docker.yml):**
+**Docker CI**:
 
-1. `build` - Build and test development image with docker compose
+1. `build` - Multi-stage Docker build
+2. `health-check` - Verify container starts and responds
 
 ## Quick Reference
 
-### Key Files
+### Key Backend Files
 
-- `template_server.py` - Base TemplateServer class with middleware/auth setup
-- `main.py` - ExampleServer implementation showing how to extend TemplateServer
-- `certificate_handler.py` - Self-signed SSL certificate generation and loading
-- `logging_setup.py` - Logging configuration (executed on import)
-- `models.py` - All Pydantic models (config + responses)
-- `constants.py` - Project constants, logging config
-- `docker-compose.yml` - Container stack
+- `cloud_server/server.py` - CloudServer class
+- `cloud_server/main.py` - Entry point
+- `cloud_server/models.py` - Pydantic models
+- `cloud_server/routers/files_router.py` - File operations API
+- `cloud_server/db/files_metadata_database_manager.py` - Database manager
+- `cloud_server/thumbnail_generator.py` - Thumbnail generation
+- `configuration/config.json` - Server configuration
+- `tests/` - Backend tests
 
-### Environment Variables
+### Key Frontend Files
 
-- `HOST` - Server host address (default: 0.0.0.0)
-- `PORT` - Server port (default: 8000)
-- `NGINX_PROXY_URL` - URL of the Nginx proxy (set to your Nginx proxy URL)
+- `cloud-server-frontend/src/app/drive/page.tsx` - Main file browser
+- `cloud-server-frontend/src/lib/api.ts` - API client
+- `cloud-server-frontend/src/components/drive/` - File browser components
+- `cloud-server-frontend/src/contexts/AuthContext.tsx` - Auth state
+- `cloud-server-frontend/package.json` - Dependencies and scripts
 
-### Configuration Files
+### Storage Structure
 
-- `configuration/config.json` - Server configuration (rate limiting, security, CORS, certificate, etc.)
-- `.env.example` - Template for environment variables (HOST, PORT, NGINX_PROXY_URL)
-- `.env` - Environment variables including host, port, and NGINX proxy URL
+```
+server/
+  storage/                    # User files
+    .thumbnails/              # Generated thumbnails
+      <file_id>.png          # Thumbnail for file_id
+    file1.jpg
+    folder1/
+      file2.pdf
+data/
+  files_metadata.db          # SQLite database
+```
+
+### API Endpoints
+
+- `GET /api/health` - Health check
+- `GET /api/auth_enabled` - Check if auth is enabled
+- `GET /api/files/` - List all files
+- `POST /api/files/` - Upload file
+- `GET /api/files/{id}` - Download file
+- `DELETE /api/files/{id}` - Delete file
+- `PATCH /api/files/{id}/metadata` - Update metadata
+- `GET /api/files/{id}/thumbnail` - Get thumbnail
