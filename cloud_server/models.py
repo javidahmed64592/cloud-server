@@ -105,6 +105,22 @@ class UpdateFileMetadataResponse(BaseResponse):
     file_metadata: FileMetadata = Field(..., description="The metadata of the updated file.", alias="fileMetadata")
 
 
+class MoveFolderResponse(BaseResponse):
+    """Response model for moving/renaming a folder."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    files_updated: int = Field(..., description="Number of file records updated.", alias="filesUpdated")
+
+
+class DeleteFolderResponse(BaseResponse):
+    """Response model for deleting a folder."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    files_deleted: int = Field(..., description="Number of file records deleted.", alias="filesDeleted")
+
+
 # API Request Models
 class UpdateFileMetadataRequest(BaseModel):
     """Request model for updating file metadata."""
@@ -115,3 +131,11 @@ class UpdateFileMetadataRequest(BaseModel):
     parent_directory: Path = Field(
         ..., description="New parent directory path relative to server storage directory.", alias="parentDirectory"
     )
+
+
+class MoveFolderRequest(BaseModel):
+    """Request model for moving/renaming a folder."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    new_path: str = Field(..., description="New folder path relative to storage directory.", alias="newPath")

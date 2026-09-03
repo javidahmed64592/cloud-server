@@ -132,6 +132,38 @@ class FilesMetadataDatabaseManager(BaseDatabaseManager):
         with Session(self.engine) as session:
             return self._list_files_metadata(session=session)
 
+    def rename_folder(self, old_path: str, new_path: str) -> int:
+        """Update parent_directory for all files in old_path, returning the count updated."""
+        with Session(self.engine) as session:
+            entries = session.exec(select(FileMetadataDB)).all()
+            count = 0
+            for entry in entries:
+                if entry.parent_directory == old_path:
+                    entry.parent_directory = new_path
+                    entry.updated_at = current_timestamp_int()
+                    session.add(entry)
+                    count += 1
+                elif entry.parent_directory.startswith(old_path + "/"):
+                    suffix = entry.parent_directory[len(old_path) :]  # includes leading "/"
+                    entry.parent_directory = new_path + suffix
+                    entry.updated_at = current_timestamp_int()
+                    session.add(entry)
+                    count += 1
+            session.commit()
+            return count
+
+    def delete_files_in_folder(self, folder_path: str) -> list[FileMetadata]:
+        """Delete all file records under folder_path (including subfolders) and return them."""
+        with Session(self.engine) as session:
+            entries = session.exec(select(FileMetadataDB)).all()
+            deleted: list[FileMetadata] = []
+            for entry in entries:
+                if entry.parent_directory == folder_path or entry.parent_directory.startswith(folder_path + "/"):
+                    deleted.append(entry.to_file_metadata())
+                    session.delete(entry)
+            session.commit()
+            return deleted
+
     def perform_file_metadata_action(
         self, action: DatabaseAction, file_metadata: FileMetadata | None = None, file_id: int | None = None
     ) -> FileMetadata:

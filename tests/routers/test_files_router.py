@@ -5,10 +5,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.routing import APIRoute
+from python_template_server.models import ResponseCode
 
-from cloud_server.models import UpdateFileMetadataRequest
+from cloud_server.models import DatabaseAction, FileMetadata, MoveFolderRequest, UpdateFileMetadataRequest
 from cloud_server.routers import FilesRouter
 
 
@@ -21,12 +22,135 @@ class TestRoutes:
         routes = [route.path for route in api_routes]
         expected_endpoints = [
             "/files/",
+            "/files/folders/",
             "/files/{file_id}",
             "/files/{file_id}/metadata",
             "/files/{file_id}/thumbnail",
         ]
         for endpoint in expected_endpoints:
             assert endpoint in routes
+
+
+class TestMoveFolderEndpoint:
+    """Integration tests for the PATCH /files/folders/ endpoint."""
+
+    @pytest.fixture
+    def mock_request_object(self) -> Request:
+        """Provide a mock Request object."""
+        return MagicMock(spec=Request)
+
+    @pytest.fixture
+    def folder_with_files(self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path) -> str:
+        """Create a folder with a file and register it in the DB."""
+        folder_name = "test_folder"
+        folder_dir = mock_tmp_storage_path / folder_name
+        folder_dir.mkdir(parents=True, exist_ok=True)
+        file_path = folder_dir / "sample.txt"
+        file_path.write_text("hello")
+        mock_files_router._db.perform_file_metadata_action(
+            DatabaseAction.CREATE,
+            file_metadata=FileMetadata(
+                filename="sample.txt", parent_directory=Path(folder_name), mime_type="text/plain", size=5
+            ),
+        )
+        return folder_name
+
+    def test_move_folder(
+        self,
+        mock_files_router: FilesRouter,
+        mock_request_object: Request,
+        mock_tmp_storage_path: Path,
+        folder_with_files: str,
+    ) -> None:
+        """Test renaming a folder and updating its file records."""
+        old_name = folder_with_files
+        new_name = "renamed_folder"
+        body = MoveFolderRequest(newPath=new_name)
+
+        response = asyncio.run(mock_files_router.move_folder(mock_request_object, path=old_name, body=body))
+
+        assert "renamed_folder" in response.message
+        assert response.files_updated >= 1
+        assert (mock_tmp_storage_path / new_name).exists()
+        assert not (mock_tmp_storage_path / old_name).exists()
+        files = mock_files_router._db.list_files()
+        assert any(str(f.parent_directory) == new_name for f in files)
+
+    def test_move_folder_not_found(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Test that moving a non-existent folder raises NOT_FOUND."""
+        body = MoveFolderRequest(newPath="new_name")
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(mock_files_router.move_folder(mock_request_object, path="nonexistent", body=body))
+        assert exc_info.value.status_code == ResponseCode.NOT_FOUND
+
+    def test_move_folder_invalid_path(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Test that path traversal attempts are rejected."""
+        body = MoveFolderRequest(newPath="safe_name")
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(mock_files_router.move_folder(mock_request_object, path="../evil", body=body))
+        assert exc_info.value.status_code == ResponseCode.BAD_REQUEST
+
+    def test_move_folder_root_rejected(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Test that moving the root directory is rejected."""
+        body = MoveFolderRequest(newPath="safe_name")
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(mock_files_router.move_folder(mock_request_object, path=".", body=body))
+        assert exc_info.value.status_code == ResponseCode.BAD_REQUEST
+
+
+class TestDeleteFolderEndpoint:
+    """Integration tests for the DELETE /files/folders/ endpoint."""
+
+    @pytest.fixture
+    def mock_request_object(self) -> Request:
+        """Provide a mock Request object."""
+        return MagicMock(spec=Request)
+
+    @pytest.fixture
+    def folder_with_files(self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path) -> str:
+        """Create a folder with a file and register it in the DB."""
+        folder_name = "to_delete"
+        folder_dir = mock_tmp_storage_path / folder_name
+        folder_dir.mkdir(parents=True, exist_ok=True)
+        file_path = folder_dir / "file.txt"
+        file_path.write_text("data")
+        mock_files_router._db.perform_file_metadata_action(
+            DatabaseAction.CREATE,
+            file_metadata=FileMetadata(
+                filename="file.txt", parent_directory=Path(folder_name), mime_type="text/plain", size=4
+            ),
+        )
+        return folder_name
+
+    def test_delete_folder(
+        self,
+        mock_files_router: FilesRouter,
+        mock_request_object: Request,
+        mock_tmp_storage_path: Path,
+        folder_with_files: str,
+    ) -> None:
+        """Test deleting a folder removes it from disk and DB."""
+        folder_name = folder_with_files
+        before = len(mock_files_router._db.list_files())
+
+        response = asyncio.run(mock_files_router.delete_folder(mock_request_object, path=folder_name))
+
+        assert response.files_deleted >= 1
+        assert not (mock_tmp_storage_path / folder_name).exists()
+        after = len(mock_files_router._db.list_files())
+        assert after == before - response.files_deleted
+
+    def test_delete_folder_not_found(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Test that deleting a non-existent folder raises NOT_FOUND."""
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(mock_files_router.delete_folder(mock_request_object, path="ghost_folder"))
+        assert exc_info.value.status_code == ResponseCode.NOT_FOUND
+
+    def test_delete_folder_invalid_path(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Test that path traversal in delete is rejected."""
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(mock_files_router.delete_folder(mock_request_object, path="../etc"))
+        assert exc_info.value.status_code == ResponseCode.BAD_REQUEST
 
 
 class TestListFilesEndpoint:

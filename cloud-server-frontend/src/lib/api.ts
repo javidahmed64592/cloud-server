@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 
 import type {
   DeleteFileResponse,
+  DeleteFolderResponse,
   FileMetadata,
   GetAuthEnabledResponse,
   HealthResponse,
   ListFilesResponse,
+  MoveFolderResponse,
   UpdateFileMetadataRequest,
   UpdateFileMetadataResponse,
   UploadFileResponse,
@@ -87,6 +89,33 @@ export const getAuthEnabled = async (): Promise<GetAuthEnabledResponse> => {
 // ---------------------------------------------------------------------------
 // Files API (mirrors FilesRouter endpoints in cloud_server/routers/files_router.py)
 // ---------------------------------------------------------------------------
+
+// PATCH /files/folders/?path=... — rename or move a folder
+export const moveFolder = async (
+  path: string,
+  newPath: string
+): Promise<void> => {
+  try {
+    await api.patch<MoveFolderResponse>(
+      "/files/folders/",
+      { newPath },
+      { params: { path } }
+    );
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};
+
+// DELETE /files/folders/?path=... — delete a folder and all its contents
+export const deleteFolder = async (path: string): Promise<void> => {
+  try {
+    await api.delete<DeleteFolderResponse>("/files/folders/", {
+      params: { path },
+    });
+  } catch (error) {
+    throw new Error(extractErrorMessage(error));
+  }
+};
 
 // GET /files/ — list all files
 export const listFiles = async (): Promise<FileMetadata[]> => {

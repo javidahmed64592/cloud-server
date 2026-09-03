@@ -50,3 +50,15 @@ export interface UpdateFileMetadataRequest {
   filename?: string;
   parentDirectory?: string;
 }
+
+export interface MoveFolderRequest {
+  newPath: string;
+}
+
+export interface MoveFolderResponse extends BaseResponse {
+  filesUpdated: number;
+}
+
+export interface DeleteFolderResponse extends BaseResponse {
+  filesDeleted: number;
+}

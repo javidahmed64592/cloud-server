@@ -6,6 +6,8 @@ import type { FileMetadata } from "@/lib/types";
 
 describe("FileGrid", () => {
   const mockOnFolderClick = jest.fn();
+  const mockOnFolderMove = jest.fn();
+  const mockOnFolderDelete = jest.fn();
   const mockOnFileOpen = jest.fn();
   const mockOnFileMove = jest.fn();
   const mockOnFileDelete = jest.fn();
@@ -46,6 +48,8 @@ describe("FileGrid", () => {
         files={[]}
         thumbnails={{}}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -62,6 +66,8 @@ describe("FileGrid", () => {
         files={[]}
         thumbnails={{}}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -79,6 +85,8 @@ describe("FileGrid", () => {
         files={mockFiles}
         thumbnails={mockThumbnails}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -96,6 +104,8 @@ describe("FileGrid", () => {
         files={mockFiles}
         thumbnails={mockThumbnails}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -115,6 +125,8 @@ describe("FileGrid", () => {
         files={[]}
         thumbnails={{}}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -128,6 +140,52 @@ describe("FileGrid", () => {
     expect(mockOnFolderClick).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onFolderMove when folder rename/move button is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <FileGrid
+        folders={["TestFolder"]}
+        files={[]}
+        thumbnails={{}}
+        onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
+        onFileOpen={mockOnFileOpen}
+        onFileMove={mockOnFileMove}
+        onFileDelete={mockOnFileDelete}
+      />
+    );
+
+    const moveButton = screen.getByTitle("Rename / Move");
+    await user.click(moveButton);
+
+    expect(mockOnFolderMove).toHaveBeenCalledWith("TestFolder");
+    expect(mockOnFolderClick).not.toHaveBeenCalled();
+  });
+
+  it("calls onFolderDelete when folder delete button is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <FileGrid
+        folders={["TestFolder"]}
+        files={[]}
+        thumbnails={{}}
+        onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
+        onFileOpen={mockOnFileOpen}
+        onFileMove={mockOnFileMove}
+        onFileDelete={mockOnFileDelete}
+      />
+    );
+
+    const deleteButton = screen.getByTitle("Delete");
+    await user.click(deleteButton);
+
+    expect(mockOnFolderDelete).toHaveBeenCalledWith("TestFolder");
+    expect(mockOnFolderClick).not.toHaveBeenCalled();
+  });
+
   it("passes thumbnails to FileCard correctly", () => {
     render(
       <FileGrid
@@ -135,6 +193,8 @@ describe("FileGrid", () => {
         files={mockFiles}
         thumbnails={mockThumbnails}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -152,6 +212,8 @@ describe("FileGrid", () => {
         files={mockFiles}
         thumbnails={mockThumbnails}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -174,6 +236,8 @@ describe("FileGrid", () => {
         files={[firstFile]}
         thumbnails={{}}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
@@ -204,6 +268,8 @@ describe("FileGrid", () => {
         files={manyFiles}
         thumbnails={{}}
         onFolderClick={mockOnFolderClick}
+        onFolderMove={mockOnFolderMove}
+        onFolderDelete={mockOnFolderDelete}
         onFileOpen={mockOnFileOpen}
         onFileMove={mockOnFileMove}
         onFileDelete={mockOnFileDelete}
