@@ -1,6 +1,7 @@
 """Unit tests for the cloud_server.routers.files_router module."""
 
 import asyncio
+import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -96,6 +97,59 @@ class TestMoveFolderEndpoint:
         with pytest.raises(HTTPException) as exc_info:
             asyncio.run(mock_files_router.move_folder(mock_request_object, path=".", body=body))
         assert exc_info.value.status_code == ResponseCode.BAD_REQUEST
+
+
+class TestDownloadFolderEndpoint:
+    """Integration tests for the GET /files/folders/download endpoint."""
+
+    @pytest.fixture
+    def mock_request_object(self) -> Request:
+        """Provide a mock Request object."""
+        return MagicMock(spec=Request)
+
+    @pytest.fixture
+    def nested_folder(self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path) -> str:
+        """Create folder/sub with files and register them in the DB."""
+        for parent, name in (("dl", "a.txt"), ("dl/sub", "b.txt")):
+            (mock_tmp_storage_path / parent).mkdir(parents=True, exist_ok=True)
+            (mock_tmp_storage_path / parent / name).write_text(name)
+            mock_files_router._db.perform_file_metadata_action(
+                DatabaseAction.CREATE,
+                file_metadata=FileMetadata(
+                    filename=name, parent_directory=Path(parent), mime_type="text/plain", size=5
+                ),
+            )
+        return "dl"
+
+    def test_download_folder(
+        self, mock_files_router: FilesRouter, mock_request_object: Request, nested_folder: str
+    ) -> None:
+        """A folder zip contains its files with paths relative to the folder."""
+        response = asyncio.run(mock_files_router.download_folder(mock_request_object, path=nested_folder))
+        with zipfile.ZipFile(response.path) as archive:
+            assert sorted(archive.namelist()) == ["a.txt", "sub/b.txt"]
+        Path(response.path).unlink()
+
+    def test_download_root(
+        self, mock_files_router: FilesRouter, mock_request_object: Request, nested_folder: str
+    ) -> None:
+        """Downloading '.' includes every tracked file."""
+        response = asyncio.run(mock_files_router.download_folder(mock_request_object, path="."))
+        with zipfile.ZipFile(response.path) as archive:
+            assert {"dl/a.txt", "dl/sub/b.txt"} <= set(archive.namelist())
+        Path(response.path).unlink()
+
+    def test_download_missing_folder(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """A missing folder returns 404."""
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.download_folder(mock_request_object, path="nope"))
+        assert exc.value.status_code == ResponseCode.NOT_FOUND
+
+    def test_download_traversal(self, mock_files_router: FilesRouter, mock_request_object: Request) -> None:
+        """Traversal outside storage is rejected."""
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.download_folder(mock_request_object, path="../.."))
+        assert exc.value.status_code == ResponseCode.BAD_REQUEST
 
 
 class TestDeleteFolderEndpoint:
