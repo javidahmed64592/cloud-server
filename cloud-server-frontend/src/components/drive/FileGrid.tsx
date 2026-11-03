@@ -10,6 +10,7 @@ interface FileGridProps {
   thumbnails: Record<number, string>;
   onFolderClick: (name: string) => void;
   onFolderMove: (name: string) => void;
+  onFolderDownload: (name: string) => void;
   onFolderDelete: (name: string) => void;
   onFileOpen: (file: FileMetadata) => void;
   onFileMove: (file: FileMetadata) => void;
@@ -22,6 +23,7 @@ export default function FileGrid({
   thumbnails,
   onFolderClick,
   onFolderMove,
+  onFolderDownload,
   onFolderDelete,
   onFileOpen,
   onFileMove,
@@ -43,6 +45,7 @@ export default function FileGrid({
           name={name}
           onClick={() => onFolderClick(name)}
           onMove={() => onFolderMove(name)}
+          onDownload={() => onFolderDownload(name)}
           onDelete={() => onFolderDelete(name)}
         />
       ))}

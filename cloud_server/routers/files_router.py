@@ -2,6 +2,7 @@
 
 import logging
 import shutil
+import zipfile
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -11,6 +12,8 @@ from fastapi.responses import FileResponse
 from python_template_server.constants import MB_TO_BYTES
 from python_template_server.models import ResponseCode
 from python_template_server.routers import BaseRouter
+from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from cloud_server.db import FilesMetadataDatabaseManager
 from cloud_server.models import (
@@ -87,12 +90,12 @@ class FilesRouter(BaseRouter):
         if temp_filepath and temp_filepath.exists():
             temp_filepath.unlink()
 
-    def _resolve_folder_path(self, path: str) -> Path:
+    def _resolve_folder_path(self, path: str, *, allow_root: bool = False) -> Path:
         """Validate and resolve a relative folder path, guarding against traversal."""
         folder = Path(path)
         if folder.is_absolute():
             raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail="Folder path must be relative.")
-        if str(folder) in (".", ""):
+        if str(folder) in (".", "") and not allow_root:
             raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail="Cannot operate on the root directory.")
         storage = self._storage_directory.resolve()
         resolved = (self._storage_directory / folder).resolve()
@@ -109,6 +112,13 @@ class FilesRouter(BaseRouter):
             handler_function=self.move_folder,
             response_model=MoveFolderResponse,
             methods=["PATCH"],
+            limited=True,
+        )
+        self.add_route(
+            endpoint="/folders/download",
+            handler_function=self.download_folder,
+            response_model=None,
+            methods=["GET"],
             limited=True,
         )
         self.add_route(
@@ -197,6 +207,60 @@ class FilesRouter(BaseRouter):
             files_updated=count,
         )
 
+    def _build_folder_zip(self, folder: Path, zip_path: Path) -> int:
+        """Zip all tracked files under ``folder`` (``.`` for everything), returning the file count."""
+        prefix = str(folder)
+        count = 0
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+            for file_metadata in self._db.list_files():
+                parent = str(file_metadata.parent_directory)
+                in_folder = prefix in {".", parent} or parent.startswith(f"{prefix}/")
+                if not in_folder:
+                    continue
+                source = self._storage_directory / file_metadata.filepath
+                if not source.is_file():
+                    continue
+                arcname = file_metadata.filepath if prefix == "." else file_metadata.filepath.relative_to(folder)
+                archive.write(source, arcname=str(arcname))
+                count += 1
+        return count
+
+    async def download_folder(self, request: Request, path: str = ".") -> FileResponse:
+        """Download a folder (or the entire storage directory with ``path=.``) as a zip archive.
+
+        :param Request request: The incoming HTTP request
+        :param str path: Folder path relative to storage directory; ``.`` downloads everything
+        :return FileResponse: The zip archive
+        :raises HTTPException: If path validation fails or the folder has no files
+        """
+        folder = self._resolve_folder_path(path, allow_root=True)
+        if str(folder) != "." and not (self._storage_directory / folder).is_dir():
+            error_msg = f"Folder not found in storage: {path}"
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=error_msg)
+
+        with NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            zip_path = Path(tmp.name)
+        try:
+            count = await run_in_threadpool(self._build_folder_zip, folder, zip_path)
+        except Exception as e:
+            self._cleanup_temp_file(temp_filepath=zip_path)
+            error_msg = f"Failed to create archive for folder: {path}"
+            logger.exception(error_msg)
+            raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
+
+        if count == 0:
+            self._cleanup_temp_file(temp_filepath=zip_path)
+            raise HTTPException(status_code=ResponseCode.NOT_FOUND, detail=f"No files to download in: {path}")
+
+        name = "storage" if str(folder) == "." else folder.name
+        return FileResponse(
+            path=zip_path,
+            media_type="application/zip",
+            filename=f"{name}.zip",
+            background=BackgroundTask(self._cleanup_temp_file, temp_filepath=zip_path),
+        )
+
     async def delete_folder(self, request: Request, path: str) -> DeleteFolderResponse:
         """Delete a folder and all its contents.
 
@@ -251,9 +315,19 @@ class FilesRouter(BaseRouter):
         :return UploadFileResponse: File upload response
         :raises HTTPException: If file validation fails or storage operation fails
         """
-        # Validate filename
-        if not file.filename:
+        # Validate filename. Browsers may send a relative path (e.g. "folder/sub/file.txt") as the filename
+        # for folder uploads, so only keep the final path component.
+        filename = Path((file.filename or "").replace("\\", "/")).name
+        if not filename or filename in {".", ".."}:
             error_msg = "Filename is required for file upload."
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+
+        # Guard against absolute paths and traversal outside the storage directory
+        parent_path = Path(parent_directory)
+        resolved_parent = (self._storage_directory / parent_path).resolve()
+        if parent_path.is_absolute() or not resolved_parent.is_relative_to(self._storage_directory.resolve()):
+            error_msg = f"Invalid parent directory: {parent_directory}"
             logger.error(error_msg)
             raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
 
@@ -273,15 +347,15 @@ class FilesRouter(BaseRouter):
 
         except Exception as e:
             self._cleanup_temp_file(temp_filepath=temp_filepath)
-            error_msg = f"Failed to read uploaded file: {file.filename}"
+            error_msg = f"Failed to read uploaded file: {filename}"
             logger.exception(error_msg)
             raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
         # Create file metadata
         file_metadata = FileMetadata(
             id=None,
-            filename=file.filename,
-            parent_directory=Path(parent_directory),
+            filename=filename,
+            parent_directory=parent_path,
             mime_type=file.content_type or "application/octet-stream",
             size=file_size,
         )

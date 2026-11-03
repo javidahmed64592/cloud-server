@@ -39,6 +39,15 @@ const api = axios.create({
 // Health status type
 export type HealthStatus = "online" | "offline" | "checking";
 
+export class ApiError extends Error {
+  status: number | undefined;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 const extractErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
     if (error.response) {
@@ -106,6 +115,11 @@ export const moveFolder = async (
   }
 };
 
+// GET /files/folders/download?path=... — URL of a zip of a folder ("." = everything).
+// Used as a plain link so the browser streams the download instead of buffering it.
+export const getFolderDownloadUrl = (path: string): string =>
+  `${api.defaults.baseURL}/files/folders/download?path=${encodeURIComponent(path)}`;
+
 // DELETE /files/folders/?path=... — delete a folder and all its contents
 export const deleteFolder = async (path: string): Promise<void> => {
   try {
@@ -141,7 +155,10 @@ export const uploadFile = async (
     });
     return response.data.fileMetadata;
   } catch (error) {
-    throw new Error(extractErrorMessage(error));
+    throw new ApiError(
+      extractErrorMessage(error),
+      axios.isAxiosError(error) ? error.response?.status : undefined
+    );
   }
 };
 
