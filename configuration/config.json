@@ -14,7 +14,7 @@
   },
   "rate_limit": {
     "enabled": true,
-    "rate_limit": "100/minute",
+    "rate_limit": "1000/minute",
     "storage_uri": ""
   },
   "json_response": {
