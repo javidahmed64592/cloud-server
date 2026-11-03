@@ -4,6 +4,7 @@ interface FolderCardProps {
   name: string;
   onClick: () => void;
   onMove: () => void;
+  onDownload: () => void;
   onDelete: () => void;
 }
 
@@ -11,6 +12,7 @@ export default function FolderCard({
   name,
   onClick,
   onMove,
+  onDownload,
   onDelete,
 }: FolderCardProps) {
   return (
@@ -37,6 +39,29 @@ export default function FolderCard({
 
         {/* Hover overlay with action buttons */}
         <div className="absolute inset-0 flex items-center justify-center gap-1 rounded bg-black/70 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              onDownload();
+            }}
+            className="rounded p-1.5 bg-white/10 text-white hover:bg-white/25 transition-colors"
+            title="Download as zip"
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={e => {

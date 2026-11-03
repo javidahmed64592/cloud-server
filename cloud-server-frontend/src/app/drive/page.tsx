@@ -18,12 +18,13 @@ import {
   deleteFile as apiDeleteFile,
   deleteFolder as apiDeleteFolder,
   getFileBlob,
+  getFolderDownloadUrl,
   getThumbnailBlob,
   listFiles,
   moveFolder as apiMoveFolder,
   updateFileMetadata,
-  uploadFile,
 } from "@/lib/api";
+import { summarizeBatch, uploadBatch } from "@/lib/batchUpload";
 import type { FileMetadata } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -350,6 +351,24 @@ export default function DrivePage() {
     [currentPath]
   );
 
+  const downloadPath = useCallback((path: string) => {
+    // Plain navigation to an attachment response: the browser streams it to disk
+    const a = document.createElement("a");
+    a.href = getFolderDownloadUrl(path);
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, []);
+
+  const handleFolderDownload = useCallback(
+    (folderName: string) =>
+      downloadPath(
+        currentPath === "." ? folderName : `${currentPath}/${folderName}`
+      ),
+    [currentPath, downloadPath]
+  );
+
   const handleFolderMoveConfirm = useCallback(
     async (newName: string, newParent: string) => {
       if (!folderDialogPath) return;
@@ -446,17 +465,17 @@ export default function DrivePage() {
 
       if (allFileItems.length === 0) return;
 
-      setDropProgress({ done: 0, total: allFileItems.length });
       try {
-        for (let i = 0; i < allFileItems.length; i++) {
-          const { file, parentDir } = allFileItems[i]!;
-          const metadata = await uploadFile(file, parentDir);
-          handleUpload(metadata);
-          setDropProgress({ done: i + 1, total: allFileItems.length });
+        const result = await uploadBatch(
+          allFileItems,
+          handleUpload,
+          (done, total) => setDropProgress({ done, total })
+        );
+        const msg = summarizeBatch(result);
+        if (msg) {
+          setError(msg);
+          setTimeout(() => setError(null), 8000);
         }
-      } catch (err) {
-        setError(String(err));
-        setTimeout(() => setError(null), 5000);
       } finally {
         setDropProgress(null);
       }
@@ -508,6 +527,18 @@ export default function DrivePage() {
               Uploading {dropProgress.done}/{dropProgress.total}…
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => downloadPath(currentPath)}
+            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary"
+            title={
+              currentPath === "."
+                ? "Download all files as a zip"
+                : "Download this folder as a zip"
+            }
+          >
+            {currentPath === "." ? "Download all" : "Download folder"}
+          </button>
           <UploadButton currentPath={currentPath} onUpload={handleUpload} />
         </div>
       </div>
@@ -533,6 +564,7 @@ export default function DrivePage() {
         thumbnails={thumbnails}
         onFolderClick={handleNavigateFolder}
         onFolderMove={handleFolderMove}
+        onFolderDownload={handleFolderDownload}
         onFolderDelete={setDeleteFolderTarget}
         onFileOpen={handleOpenFile}
         onFileMove={setMoveDialogFile}

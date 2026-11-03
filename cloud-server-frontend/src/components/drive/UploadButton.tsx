@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { uploadFile } from "@/lib/api";
+import {
+  summarizeBatch,
+  uploadBatch,
+  type UploadItem,
+} from "@/lib/batchUpload";
 import type { FileMetadata } from "@/lib/types";
 
 interface UploadButtonProps {
@@ -26,31 +30,25 @@ export default function UploadButton({
     total: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState<UploadItem[]>([]);
 
   // webkitdirectory is not in React's HTMLInputElement typings
   useEffect(() => {
     folderInputRef.current?.setAttribute("webkitdirectory", "");
   }, []);
 
-  const uploadBatch = async (
-    items: { file: File; parentDir: string }[]
-  ): Promise<void> => {
+  const runBatch = async (items: UploadItem[]): Promise<void> => {
     if (items.length === 0) return;
     setProgress({ done: 0, total: items.length });
     setError(null);
     try {
-      for (let i = 0; i < items.length; i++) {
-        const { file, parentDir } = items[i]!;
-        const metadata = await uploadFile(file, parentDir);
-        onUpload(metadata);
-        setProgress({ done: i + 1, total: items.length });
-      }
-    } catch (err) {
-      const msg = String(err);
-      // eslint-disable-next-line no-console
-      console.error("Upload failed:", msg);
+      const result = await uploadBatch(items, onUpload, (done, total) =>
+        setProgress({ done, total })
+      );
+      setFailed(result.failed.map(f => f.item));
+      const msg = summarizeBatch(result);
       setError(msg);
-      setTimeout(() => setError(null), 5000);
+      if (msg) setTimeout(() => setError(null), 5000);
     } finally {
       setProgress(null);
     }
@@ -58,7 +56,7 @@ export default function UploadButton({
 
   const handleFileChange = async (files: FileList | null): Promise<void> => {
     if (!files || files.length === 0) return;
-    await uploadBatch(
+    await runBatch(
       Array.from(files).map(file => ({ file, parentDir: currentPath }))
     );
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -66,7 +64,7 @@ export default function UploadButton({
 
   const handleFolderChange = async (files: FileList | null): Promise<void> => {
     if (!files || files.length === 0) return;
-    await uploadBatch(
+    await runBatch(
       Array.from(files).map(file => {
         const parts = file.webkitRelativePath.split("/");
         parts.pop(); // strip filename, keep directory segments
@@ -150,6 +148,15 @@ export default function UploadButton({
         <span className="max-w-xs truncate text-xs text-neon-red" title={error}>
           {error}
         </span>
+      )}
+      {failed.length > 0 && !isUploading && (
+        <button
+          type="button"
+          onClick={() => runBatch(failed)}
+          className="rounded-md border border-neon-red/40 px-3 py-1.5 text-xs font-medium text-neon-red hover:opacity-90"
+        >
+          Retry {failed.length} failed
+        </button>
       )}
     </div>
   );

@@ -181,7 +181,7 @@ describe("UploadButton", () => {
     await user.upload(fileInput, file);
 
     await waitFor(() => {
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(errorMessage))).toBeInTheDocument();
     });
     expect(mockOnUpload).not.toHaveBeenCalled();
   });
@@ -204,7 +204,7 @@ describe("UploadButton", () => {
     await user.upload(fileInput, file);
 
     await waitFor(() => {
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(errorMessage))).toBeInTheDocument();
     });
 
     // Advance timers and wait for state update
@@ -213,7 +213,9 @@ describe("UploadButton", () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByText(errorMessage)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(new RegExp(errorMessage))
+      ).not.toBeInTheDocument();
     });
 
     unmount();
@@ -300,13 +302,13 @@ describe("UploadButton", () => {
     // First upload (fails)
     await user.upload(fileInput, file);
     await waitFor(() => {
-      expect(screen.getByText("First upload failed")).toBeInTheDocument();
+      expect(screen.getByText(/First upload failed/)).toBeInTheDocument();
     });
 
     // Second upload (succeeds)
     await user.upload(fileInput, file);
     await waitFor(() => {
-      expect(screen.queryByText("First upload failed")).not.toBeInTheDocument();
+      expect(screen.queryByText(/First upload failed/)).not.toBeInTheDocument();
     });
   });
 

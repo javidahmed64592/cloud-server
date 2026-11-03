@@ -8,15 +8,27 @@ describe("FolderCard", () => {
   const mockOnMove = jest.fn();
   const mockOnDelete = jest.fn();
 
+  const mockOnDownload = jest.fn();
   const defaultProps = {
     name: "My Folder",
     onClick: mockOnClick,
     onMove: mockOnMove,
     onDelete: mockOnDelete,
+    onDownload: mockOnDownload,
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("calls onDownload without opening the folder", async () => {
+    const user = userEvent.setup();
+    render(<FolderCard {...defaultProps} />);
+
+    await user.click(screen.getByTitle("Download as zip"));
+
+    expect(mockOnDownload).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onClick).not.toHaveBeenCalled();
   });
 
   it("renders folder name correctly", () => {
