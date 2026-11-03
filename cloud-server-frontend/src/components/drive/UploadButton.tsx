@@ -4,14 +4,17 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   summarizeBatch,
-  uploadBatch,
+  type BatchProgress,
   type UploadItem,
 } from "@/lib/batchUpload";
 import type { FileMetadata } from "@/lib/types";
+import { useBatchUpload } from "@/lib/useBatchUpload";
 
 interface UploadButtonProps {
   currentPath: string;
   onUpload: (file: FileMetadata) => void;
+  /** Reports live progress (null when idle) so the page can render it */
+  onProgress?: (progress: BatchProgress | null) => void;
 }
 
 function joinPath(base: string, relative: string): string {
@@ -22,13 +25,11 @@ function joinPath(base: string, relative: string): string {
 export default function UploadButton({
   currentPath,
   onUpload,
+  onProgress,
 }: UploadButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const [progress, setProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
+  const { progress, run } = useBatchUpload(onUpload);
   const [error, setError] = useState<string | null>(null);
   const [failed, setFailed] = useState<UploadItem[]>([]);
 
@@ -37,21 +38,18 @@ export default function UploadButton({
     folderInputRef.current?.setAttribute("webkitdirectory", "");
   }, []);
 
+  useEffect(() => {
+    onProgress?.(progress);
+  }, [progress, onProgress]);
+
   const runBatch = async (items: UploadItem[]): Promise<void> => {
     if (items.length === 0) return;
-    setProgress({ done: 0, total: items.length });
     setError(null);
-    try {
-      const result = await uploadBatch(items, onUpload, (done, total) =>
-        setProgress({ done, total })
-      );
-      setFailed(result.failed.map(f => f.item));
-      const msg = summarizeBatch(result);
-      setError(msg);
-      if (msg) setTimeout(() => setError(null), 5000);
-    } finally {
-      setProgress(null);
-    }
+    const result = await run(items);
+    setFailed(result.failed.map(f => f.item));
+    const msg = summarizeBatch(result);
+    setError(msg);
+    if (msg) setTimeout(() => setError(null), 5000);
   };
 
   const handleFileChange = async (files: FileList | null): Promise<void> => {
@@ -76,8 +74,8 @@ export default function UploadButton({
 
   const isUploading = progress !== null;
   const uploadLabel =
-    progress !== null && progress.done > 0
-      ? `Uploading ${progress.done}/${progress.total}…`
+    progress !== null && progress.finished > 0
+      ? `Uploading ${progress.finished}/${progress.total}…`
       : isUploading
         ? "Uploading…"
         : null;

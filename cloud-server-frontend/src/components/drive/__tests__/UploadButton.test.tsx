@@ -99,7 +99,11 @@ describe("UploadButton", () => {
     await user.upload(fileInput, file);
 
     await waitFor(() => {
-      expect(mockUploadFile).toHaveBeenCalledWith(file, currentPath);
+      expect(mockUploadFile).toHaveBeenCalledWith(
+        file,
+        currentPath,
+        expect.any(Function)
+      );
       expect(mockOnUpload).toHaveBeenCalledWith(mockFileMetadata);
     });
   });
@@ -380,11 +384,13 @@ describe("UploadButton", () => {
     await waitFor(() => {
       expect(mockUploadFile).toHaveBeenCalledWith(
         file1,
-        `${currentPath}/myFolder`
+        `${currentPath}/myFolder`,
+        expect.any(Function)
       );
       expect(mockUploadFile).toHaveBeenCalledWith(
         file2,
-        `${currentPath}/myFolder/sub`
+        `${currentPath}/myFolder/sub`,
+        expect.any(Function)
       );
       expect(mockOnUpload).toHaveBeenCalledTimes(2);
     });

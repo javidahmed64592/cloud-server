@@ -13,19 +13,21 @@ import FileGrid from "@/components/drive/FileGrid";
 import FileViewer from "@/components/drive/FileViewer";
 import FolderDialog from "@/components/drive/FolderDialog";
 import MoveDialog from "@/components/drive/MoveDialog";
+import ProgressPanel from "@/components/drive/ProgressPanel";
 import SortControl from "@/components/drive/SortControl";
 import UploadButton from "@/components/drive/UploadButton";
+import UploadProgress from "@/components/drive/UploadProgress";
 import {
   deleteFile as apiDeleteFile,
   deleteFolder as apiDeleteFolder,
   getFileBlob,
-  getFolderDownloadUrl,
   getThumbnailBlob,
   listFiles,
   moveFolder as apiMoveFolder,
   updateFileMetadata,
 } from "@/lib/api";
-import { summarizeBatch, uploadBatch } from "@/lib/batchUpload";
+import { summarizeBatch, type BatchProgress } from "@/lib/batchUpload";
+import { downloadFolder, type DownloadProgress } from "@/lib/download";
 import {
   DEFAULT_SORT,
   getFolderCreatedDates,
@@ -34,6 +36,7 @@ import {
   type SortOption,
 } from "@/lib/sort";
 import type { FileMetadata } from "@/lib/types";
+import { useBatchUpload } from "@/lib/useBatchUpload";
 
 // ---------------------------------------------------------------------------
 // Drag-and-drop folder traversal using the File System API
@@ -74,6 +77,12 @@ async function collectFilesFromEntry(
     allEntries.map(e => collectFilesFromEntry(e, childDir))
   );
   return nested.flat();
+}
+
+function formatBytes(bytes: number): string {
+  return bytes < 1024 * 1024
+    ? `${Math.round(bytes / 1024)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,11 +159,15 @@ export default function DrivePage() {
 
   // --- Drag-and-drop ---
   const [isDragging, setIsDragging] = useState(false);
-  const [dropProgress, setDropProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
   const dragCounterRef = useRef(0);
+
+  // --- Transfer progress ---
+  const [buttonProgress, setButtonProgress] = useState<BatchProgress | null>(
+    null
+  );
+  const [download, setDownload] = useState<
+    (DownloadProgress & { name: string }) | null
+  >(null);
 
   // ---------------------------------------------------------------------------
   // Derived state (must be before callbacks that use it)
@@ -367,14 +380,18 @@ export default function DrivePage() {
     [currentPath]
   );
 
-  const downloadPath = useCallback((path: string) => {
-    // Plain navigation to an attachment response: the browser streams it to disk
-    const a = document.createElement("a");
-    a.href = getFolderDownloadUrl(path);
-    a.download = "";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  const downloadPath = useCallback(async (path: string) => {
+    const name = path === "." ? "all files" : (path.split("/").pop() ?? path);
+    try {
+      await downloadFolder(path, progress =>
+        setDownload({ ...progress, name })
+      );
+    } catch (err) {
+      setError(String(err));
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setDownload(null);
+    }
   }, []);
 
   const handleFolderDownload = useCallback(
@@ -464,6 +481,9 @@ export default function DrivePage() {
     e.preventDefault();
   }, []);
 
+  const { progress: dropProgress, run: runDropUpload } =
+    useBatchUpload(handleUpload);
+
   const handleDrop = useCallback(
     async (e: React.DragEvent) => {
       e.preventDefault();
@@ -481,22 +501,14 @@ export default function DrivePage() {
 
       if (allFileItems.length === 0) return;
 
-      try {
-        const result = await uploadBatch(
-          allFileItems,
-          handleUpload,
-          (done, total) => setDropProgress({ done, total })
-        );
-        const msg = summarizeBatch(result);
-        if (msg) {
-          setError(msg);
-          setTimeout(() => setError(null), 8000);
-        }
-      } finally {
-        setDropProgress(null);
+      const result = await runDropUpload(allFileItems);
+      const msg = summarizeBatch(result);
+      if (msg) {
+        setError(msg);
+        setTimeout(() => setError(null), 8000);
       }
     },
-    [currentPath, handleUpload]
+    [currentPath, runDropUpload]
   );
 
   // ---------------------------------------------------------------------------
@@ -538,11 +550,6 @@ export default function DrivePage() {
           {isViewerLoading && (
             <span className="text-xs text-text-muted">Opening…</span>
           )}
-          {dropProgress !== null && (
-            <span className="text-xs text-text-muted">
-              Uploading {dropProgress.done}/{dropProgress.total}…
-            </span>
-          )}
           <SortControl value={sort} onChange={setSort} />
           <button
             type="button"
@@ -556,9 +563,38 @@ export default function DrivePage() {
           >
             {currentPath === "." ? "Download all" : "Download folder"}
           </button>
-          <UploadButton currentPath={currentPath} onUpload={handleUpload} />
+          <UploadButton
+            currentPath={currentPath}
+            onUpload={handleUpload}
+            onProgress={setButtonProgress}
+          />
         </div>
       </div>
+
+      {/* Transfer progress */}
+      {(buttonProgress || dropProgress || download) && (
+        <div className="fixed bottom-4 right-4 z-30 flex w-80 flex-col gap-2">
+          {buttonProgress && <UploadProgress progress={buttonProgress} />}
+          {dropProgress && <UploadProgress progress={dropProgress} />}
+          {download && (
+            <ProgressPanel
+              title={`Downloading ${download.name}`}
+              detail={
+                download.phase === "preparing"
+                  ? "Preparing zip…"
+                  : download.total
+                    ? `${Math.round((download.received / download.total) * 100)}%`
+                    : formatBytes(download.received)
+              }
+              percent={
+                download.phase === "downloading" && download.total
+                  ? Math.round((download.received / download.total) * 100)
+                  : null
+              }
+            />
+          )}
+        </div>
+      )}
 
       {/* Error banner */}
       {error && (

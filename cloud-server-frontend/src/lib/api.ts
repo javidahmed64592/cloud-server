@@ -30,7 +30,7 @@ const getBaseURL = () => {
 // API client configuration
 const api = axios.create({
   baseURL: getBaseURL() + "/api", // This will be proxied in dev, direct in production
-  timeout: 60000, // 60 seconds timeout for LLM responses
+  timeout: 1200000,
   headers: {
     "Content-Type": "application/json",
   },
@@ -144,7 +144,8 @@ export const listFiles = async (): Promise<FileMetadata[]> => {
 // POST /files/ — upload a file
 export const uploadFile = async (
   file: File,
-  parentDirectory: string
+  parentDirectory: string,
+  onProgress?: (fraction: number) => void
 ): Promise<FileMetadata> => {
   try {
     const formData = new FormData();
@@ -152,6 +153,9 @@ export const uploadFile = async (
     const response = await api.post<UploadFileResponse>("/files/", formData, {
       params: { parent_directory: parentDirectory },
       headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: event => {
+        if (onProgress && event.total) onProgress(event.loaded / event.total);
+      },
     });
     return response.data.fileMetadata;
   } catch (error) {
