@@ -13,6 +13,7 @@ import FileGrid from "@/components/drive/FileGrid";
 import FileViewer from "@/components/drive/FileViewer";
 import FolderDialog from "@/components/drive/FolderDialog";
 import MoveDialog from "@/components/drive/MoveDialog";
+import SortControl from "@/components/drive/SortControl";
 import UploadButton from "@/components/drive/UploadButton";
 import {
   deleteFile as apiDeleteFile,
@@ -25,6 +26,13 @@ import {
   updateFileMetadata,
 } from "@/lib/api";
 import { summarizeBatch, uploadBatch } from "@/lib/batchUpload";
+import {
+  DEFAULT_SORT,
+  getFolderCreatedDates,
+  sortFiles,
+  sortFolders,
+  type SortOption,
+} from "@/lib/sort";
 import type { FileMetadata } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -111,6 +119,9 @@ export default function DrivePage() {
   // --- Navigation ---
   const [currentPath, setCurrentPath] = useState(".");
 
+  // --- Sorting (folders always listed before files) ---
+  const [sort, setSort] = useState<SortOption>(DEFAULT_SORT);
+
   // --- Thumbnail cache (blob URLs keyed by file ID) ---
   const thumbnailCacheRef = useRef<Record<number, string>>({});
   const thumbnailFetchingRef = useRef<Set<number>>(new Set());
@@ -149,12 +160,17 @@ export default function DrivePage() {
   // Derived state (must be before callbacks that use it)
   // ---------------------------------------------------------------------------
   const currentFiles = useMemo(
-    () => getFilesInDirectory(allFiles, currentPath),
-    [allFiles, currentPath]
+    () => sortFiles(getFilesInDirectory(allFiles, currentPath), sort),
+    [allFiles, currentPath, sort]
   );
   const currentFolders = useMemo(
-    () => getSubfolders(allFiles, currentPath),
-    [allFiles, currentPath]
+    () =>
+      sortFolders(
+        getSubfolders(allFiles, currentPath),
+        getFolderCreatedDates(allFiles, currentPath),
+        sort
+      ),
+    [allFiles, currentPath, sort]
   );
 
   // ---------------------------------------------------------------------------
@@ -527,6 +543,7 @@ export default function DrivePage() {
               Uploading {dropProgress.done}/{dropProgress.total}…
             </span>
           )}
+          <SortControl value={sort} onChange={setSort} />
           <button
             type="button"
             onClick={() => downloadPath(currentPath)}
