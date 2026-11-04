@@ -163,8 +163,10 @@ describe("UploadButton", () => {
     const button = screen.getByRole("button", { name: /uploading/i });
     expect(button).toBeDisabled();
 
+    // Wait for the upload to finish so it can't leak into later tests
     await waitFor(() => {
-      expect(screen.getByText(/upload/i)).toBeInTheDocument();
+      expect(mockOnUpload).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "Upload" })).not.toBeDisabled();
     });
   });
 
