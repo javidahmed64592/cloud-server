@@ -99,7 +99,11 @@ describe("UploadButton", () => {
     await user.upload(fileInput, file);
 
     await waitFor(() => {
-      expect(mockUploadFile).toHaveBeenCalledWith(file, currentPath);
+      expect(mockUploadFile).toHaveBeenCalledWith(
+        file,
+        currentPath,
+        expect.any(Function)
+      );
       expect(mockOnUpload).toHaveBeenCalledWith(mockFileMetadata);
     });
   });
@@ -159,8 +163,10 @@ describe("UploadButton", () => {
     const button = screen.getByRole("button", { name: /uploading/i });
     expect(button).toBeDisabled();
 
+    // Wait for the upload to finish so it can't leak into later tests
     await waitFor(() => {
-      expect(screen.getByText(/upload/i)).toBeInTheDocument();
+      expect(mockOnUpload).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("button", { name: "Upload" })).not.toBeDisabled();
     });
   });
 
@@ -380,11 +386,13 @@ describe("UploadButton", () => {
     await waitFor(() => {
       expect(mockUploadFile).toHaveBeenCalledWith(
         file1,
-        `${currentPath}/myFolder`
+        `${currentPath}/myFolder`,
+        expect.any(Function)
       );
       expect(mockUploadFile).toHaveBeenCalledWith(
         file2,
-        `${currentPath}/myFolder/sub`
+        `${currentPath}/myFolder/sub`,
+        expect.any(Function)
       );
       expect(mockOnUpload).toHaveBeenCalledTimes(2);
     });

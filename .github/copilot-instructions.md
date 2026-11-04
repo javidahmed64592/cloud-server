@@ -102,7 +102,6 @@ Backend extends `TemplateServer` from python-template-server, frontend is a Reac
     "files_metadata_db_filename": "files_metadata.db"
   },
   "storage_config": {
-    "upload_chunk_size_kb": 8,
     "max_file_size_mb": 2000,
     "thumbnail_size": [200, 200]
   }

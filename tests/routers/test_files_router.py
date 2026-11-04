@@ -3,11 +3,12 @@
 import asyncio
 import zipfile
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 from python_template_server.models import ResponseCode
 
 from cloud_server.models import DatabaseAction, FileMetadata, MoveFolderRequest, UpdateFileMetadataRequest
@@ -223,56 +224,190 @@ class TestListFilesEndpoint:
         assert len(response.files_metadata) > 0
 
 
+BOUNDARY = "----testboundary"
+
+
+def make_upload_request(
+    content: bytes,
+    filename: str | None = "upload.txt",
+    content_type: str = "text/plain",
+    chunk_size: int = 7,
+    *,
+    extra_parts: bool = False,
+) -> Request:
+    """Build a real multipart Request whose body is delivered in small chunks, like a network stream."""
+    parts = b""
+    if extra_parts:
+        parts += f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="other"\r\n\r\nignored\r\n'.encode()
+    if filename is not None:
+        parts += (
+            (
+                f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode()
+            + content
+            + b"\r\n"
+        )
+    body = parts + f"--{BOUNDARY}--\r\n".encode()
+    chunks = [body[i : i + chunk_size] for i in range(0, len(body), chunk_size)]
+
+    async def receive() -> dict:
+        if chunks:
+            return {"type": "http.request", "body": chunks.pop(0), "more_body": bool(chunks)}
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"content-type", f"multipart/form-data; boundary={BOUNDARY}".encode())],
+    }
+    return Request(scope, receive)
+
+
 class TestUploadFileEndpoint:
     """Integration tests for the /files endpoint."""
 
-    @pytest.fixture
-    def mock_request_object(self) -> Request:
-        """Provide a mock Request object."""
-        return MagicMock(spec=Request)
+    def test_upload_file(self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path) -> None:
+        """Test a streamed upload is saved with the right contents and metadata."""
+        content = bytes(range(256)) * 40  # Spans many chunks, includes bytes that look like boundaries/newlines
+        request = make_upload_request(content, filename="data.bin", content_type="application/octet-stream")
 
-    def test_upload_file(  # noqa: PLR0917
+        response = asyncio.run(mock_files_router.upload_file(request, "uploads"))
+
+        assert response.message == "File uploaded successfully."
+        assert response.file_metadata.filepath == Path("uploads/data.bin")
+        assert response.file_metadata.mime_type == "application/octet-stream"
+        assert response.file_metadata.size == len(content)
+        assert (mock_tmp_storage_path / "uploads" / "data.bin").read_bytes() == content
+
+    def test_upload_ignores_other_parts_and_empty_files(
+        self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path
+    ) -> None:
+        """Test extra form fields are ignored and zero-byte files are stored."""
+        request = make_upload_request(b"", filename="empty.txt", extra_parts=True)
+
+        response = asyncio.run(mock_files_router.upload_file(request, "."))
+
+        assert response.file_metadata.size == 0
+        assert (mock_tmp_storage_path / "empty.txt").read_bytes() == b""
+
+    def test_upload_image_generates_thumbnail(
         self,
         mock_files_router: FilesRouter,
-        mock_request_object: Request,
-        mock_tmp_storage_path: Path,
         mock_image_open: MagicMock,
-        mock_video_capture: MagicMock,
-        mock_cv2_cvtcolor: MagicMock,
         mock_image_fromarray: MagicMock,
     ) -> None:
-        """Test the /files endpoint method."""
-        files_metadata = [
-            file_metadata
-            for file_metadata in mock_files_router._db.list_files()
-            if file_metadata.mime_type.startswith(("image/", "video/"))
-        ]
-        assert len(files_metadata) > 0
+        """Test image uploads get a thumbnail generated before the response is returned."""
+        request = make_upload_request(b"not-really-an-image", filename="pic.png", content_type="image/png")
 
-        for file_metadata in files_metadata:
-            mock_file = MagicMock(spec=UploadFile)
-            mock_file.filename = f"new_{file_metadata.filename}"
-            mock_file.content_type = file_metadata.mime_type
+        with patch.object(mock_files_router._thumbnail_generator, "generate_thumbnail") as mock_generate:
+            response = asyncio.run(mock_files_router.upload_file(request, "."))
 
-            file_contents = (mock_tmp_storage_path / file_metadata.filepath).read_bytes()
-            chunk_size = mock_files_router._storage_config.upload_chunk_size_kb * 1024
-            chunks_list = [file_contents[i : i + chunk_size] for i in range(0, len(file_contents), chunk_size)]
-            chunks_list.append(b"")  # Empty chunk to signal end of file
+        mock_generate.assert_called_once()
+        assert mock_generate.call_args.kwargs["file_id"] == response.file_metadata.id
 
-            async def mock_read(size: int = -1, _chunks: list[bytes] = chunks_list) -> bytes:
-                """Mock async read that returns chunks."""
-                return _chunks.pop(0) if _chunks else b""
+    def test_upload_strips_path_from_filename(
+        self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path
+    ) -> None:
+        """Test relative paths in the filename (sent by some browsers for folder uploads) are dropped."""
+        request = make_upload_request(b"hi", filename="folder/sub/hi.txt")
 
-            mock_file.read = mock_read
+        response = asyncio.run(mock_files_router.upload_file(request, "folder/sub"))
 
-            response = asyncio.run(
-                mock_files_router.upload_file(mock_request_object, mock_file, str(file_metadata.parent_directory))
-            )
+        assert response.file_metadata.filename == "hi.txt"
+        assert (mock_tmp_storage_path / "folder" / "sub" / "hi.txt").read_bytes() == b"hi"
 
-            assert response.message == "File uploaded successfully."
-            assert response.file_metadata.filepath == file_metadata.parent_directory / mock_file.filename
-            assert response.file_metadata.mime_type == mock_file.content_type
-            assert response.file_metadata.size == len(file_contents)
+    def test_upload_existing_file_conflicts_without_leaving_temp_files(
+        self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path
+    ) -> None:
+        """Test uploading an existing file returns 409, keeps the original and cleans up."""
+        (mock_tmp_storage_path / "dup.txt").write_text("original")
+        before = {p.name for p in mock_tmp_storage_path.iterdir()}
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(make_upload_request(b"new" * 100, filename="dup.txt"), "."))
+
+        assert exc.value.status_code == ResponseCode.CONFLICT
+        assert (mock_tmp_storage_path / "dup.txt").read_text() == "original"
+        assert {p.name for p in mock_tmp_storage_path.iterdir()} == before
+
+    def test_upload_existing_empty_file_conflicts(
+        self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path
+    ) -> None:
+        """Test the conflict is also detected for zero-byte uploads, where no data chunk triggers the early check."""
+        (mock_tmp_storage_path / "dup.txt").write_text("original")
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(make_upload_request(b"", filename="dup.txt"), "."))
+
+        assert exc.value.status_code == ResponseCode.CONFLICT
+
+    def test_upload_too_large(self, mock_files_router: FilesRouter, mock_tmp_storage_path: Path) -> None:
+        """Test files over the size limit are rejected and not stored."""
+        mock_files_router._storage_config.max_file_size_mb = 0
+        before = {p.name for p in mock_tmp_storage_path.iterdir()}
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(make_upload_request(b"x" * 50), "."))
+
+        assert exc.value.status_code == ResponseCode.BAD_REQUEST
+        assert {p.name for p in mock_tmp_storage_path.iterdir()} == before
+
+    @pytest.mark.parametrize("parent", ["../outside", "/etc"])
+    def test_upload_rejects_invalid_parent_directory(self, mock_files_router: FilesRouter, parent: str) -> None:
+        """Test traversal and absolute parent directories are rejected."""
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(make_upload_request(b"x"), parent))
+
+        assert exc.value.status_code == ResponseCode.BAD_REQUEST
+
+    def test_upload_without_file_part(self, mock_files_router: FilesRouter) -> None:
+        """Test a body with no file part is rejected."""
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(make_upload_request(b"", filename=None), "."))
+
+        assert exc.value.status_code == ResponseCode.BAD_REQUEST
+
+    def test_upload_requires_multipart(self, mock_files_router: FilesRouter) -> None:
+        """Test non-multipart requests are rejected."""
+        request = Request({"type": "http", "method": "POST", "headers": [(b"content-type", b"text/plain")]})
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(mock_files_router.upload_file(request, "."))
+
+        assert exc.value.status_code == ResponseCode.BAD_REQUEST
+
+
+class TestUploadFileOverHttp:
+    """Test the upload route through FastAPI, as a browser would call it."""
+
+    @pytest.fixture
+    def client(self, mock_files_router: FilesRouter) -> TestClient:
+        """Provide a client for an app serving the real upload handler (the test limiter is a mock)."""
+        app = FastAPI()
+        app.add_api_route("/files/", mock_files_router.upload_file, methods=["POST"])
+        return TestClient(app)
+
+    def test_multipart_upload(self, client: TestClient, mock_tmp_storage_path: Path) -> None:
+        """Test a normal multipart form upload is stored and returned."""
+        content = b"abc" * 100_000
+
+        response = client.post(
+            "/files/", params={"parent_directory": "dir/sub"}, files={"file": ("big.txt", content, "text/plain")}
+        )
+
+        assert response.status_code == ResponseCode.OK
+        assert response.json()["fileMetadata"]["size"] == len(content)
+        assert (mock_tmp_storage_path / "dir" / "sub" / "big.txt").read_bytes() == content
+
+    def test_duplicate_upload_returns_conflict(self, client: TestClient) -> None:
+        """Test re-uploading the same file returns 409 over HTTP."""
+        upload = {"file": ("same.txt", b"data" * 1000, "text/plain")}
+        assert client.post("/files/", params={"parent_directory": "."}, files=upload).status_code == ResponseCode.OK
+
+        response = client.post("/files/", params={"parent_directory": "."}, files=upload)
+
+        assert response.status_code == ResponseCode.CONFLICT
 
 
 class TestGetFileEndpoint:

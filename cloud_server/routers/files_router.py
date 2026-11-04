@@ -3,12 +3,15 @@
 import logging
 import shutil
 import zipfile
+from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import aiofiles
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse
+from python_multipart.exceptions import MultipartParseError
+from python_multipart.multipart import MultipartParser, parse_options_header
 from python_template_server.constants import MB_TO_BYTES
 from python_template_server.models import ResponseCode
 from python_template_server.routers import BaseRouter
@@ -32,6 +35,94 @@ from cloud_server.models import (
 from cloud_server.thumbnail_generator import ThumbnailGenerator
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ReceivedUpload:
+    """A file received from a streamed multipart upload."""
+
+    filename: str | None = None
+    content_type: str = "application/octet-stream"
+    size: int = 0
+    temp_filepath: Path = field(default_factory=Path)
+    failure: HTTPException | None = None
+
+    @property
+    def safe_filename(self) -> str:
+        """Final path component of the received filename (browsers may send relative paths)."""
+        return Path((self.filename or "").replace("\\", "/")).name
+
+    def open_temp_file(self, directory: Path) -> Path:
+        """Create the temporary file the upload is written to, returning its path."""
+        with NamedTemporaryFile(delete=False, dir=directory) as temp_file:
+            self.temp_filepath = Path(temp_file.name)
+        return self.temp_filepath
+
+    def discard(self) -> None:
+        """Delete the temporary file if it exists."""
+        self.temp_filepath.unlink(missing_ok=True)
+
+
+class _FilePartCollector:
+    """Collects the data of the multipart ``file`` part as the streaming parser emits it."""
+
+    def __init__(self, received: _ReceivedUpload) -> None:
+        """Initialize the collector.
+
+        :param _ReceivedUpload received: Upload to fill in with the part's filename and content type
+        """
+        self._received = received
+        self._pending: list[bytes] = []
+        self._header_name = b""
+        self._header_value = b""
+        self._part_headers: dict[bytes, bytes] = {}
+        self._collecting = False
+        self.callbacks = {
+            "on_part_begin": self._on_part_begin,
+            "on_header_field": self._on_header_field,
+            "on_header_value": self._on_header_value,
+            "on_header_end": self._on_header_end,
+            "on_headers_finished": self._on_headers_finished,
+            "on_part_data": self._on_part_data,
+            "on_part_end": self._on_part_end,
+        }
+
+    def take(self) -> bytes:
+        """Return and clear the file data collected since the last call."""
+        data = b"".join(self._pending)
+        self._pending.clear()
+        return data
+
+    def _on_part_begin(self) -> None:
+        self._header_name = self._header_value = b""
+        self._part_headers = {}
+
+    def _on_header_field(self, data: bytes, start: int, end: int) -> None:
+        self._header_name += data[start:end]
+
+    def _on_header_value(self, data: bytes, start: int, end: int) -> None:
+        self._header_value += data[start:end]
+
+    def _on_header_end(self) -> None:
+        self._part_headers[self._header_name.lower()] = self._header_value
+        self._header_name = self._header_value = b""
+
+    def _on_headers_finished(self) -> None:
+        _, disposition = parse_options_header(self._part_headers.get(b"content-disposition", b""))
+        # Only the first "file" part is stored; any other parts are ignored
+        if disposition.get(b"name") == b"file" and self._received.filename is None:
+            self._received.filename = disposition.get(b"filename", b"").decode("utf-8", errors="replace")
+            self._received.content_type = (
+                self._part_headers.get(b"content-type", b"").decode() or "application/octet-stream"
+            )
+            self._collecting = True
+
+    def _on_part_data(self, data: bytes, start: int, end: int) -> None:
+        if self._collecting:
+            self._pending.append(data[start:end])
+
+    def _on_part_end(self) -> None:
+        self._collecting = False
 
 
 class FilesRouter(BaseRouter):
@@ -60,27 +151,6 @@ class FilesRouter(BaseRouter):
         error_msg = f"File size ({file_size} bytes) exceeds maximum allowed size ({max_size} bytes)"
         logger.error(error_msg)
         raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
-
-    async def _stream_upload_to_temp(
-        self, file: UploadFile, temp_filepath: Path, max_size_bytes: int, chunk_size: int
-    ) -> int:
-        """Stream uploaded file to temporary location while validating size.
-
-        :param UploadFile file: The file being uploaded
-        :param Path temp_filepath: Path to temporary file
-        :param int max_size_bytes: Maximum allowed file size
-        :param int chunk_size: Size of chunks to read
-        :return int: Total file size in bytes
-        :raises HTTPException: If file size exceeds maximum
-        """
-        file_size = 0
-        async with aiofiles.open(temp_filepath, "wb") as f:
-            while chunk := await file.read(chunk_size):
-                file_size += len(chunk)
-                if file_size > max_size_bytes:
-                    self._raise_file_size_exceeded(file_size, max_size_bytes)
-                await f.write(chunk)
-        return file_size
 
     def _cleanup_temp_file(self, temp_filepath: Path | None) -> None:
         """Clean up temporary file if it exists.
@@ -306,23 +376,100 @@ class FilesRouter(BaseRouter):
             files_metadata=files_metadata,
         )
 
-    async def upload_file(self, request: Request, file: UploadFile, parent_directory: str) -> UploadFileResponse:
-        """Upload a file.
+    async def _receive_upload(self, request: Request, parent_path: Path) -> _ReceivedUpload:
+        """Stream the multipart request body straight to a temporary file in storage.
+
+        The file is written to disk as its bytes arrive rather than being buffered and copied afterwards,
+        so by the time the request body has been fully received the file has already been saved.
 
         :param Request request: The incoming HTTP request
-        :param UploadFile file: The file to upload
+        :param Path parent_path: Validated parent directory the file will be stored in
+        :return _ReceivedUpload: Details of the received file and where it was written
+        :raises HTTPException: If the body is malformed, the file already exists, or the file is too large
+        """
+        content_type, options = parse_options_header(request.headers.get("content-type", ""))
+        if content_type != b"multipart/form-data" or b"boundary" not in options:
+            error_msg = "Upload must be sent as multipart/form-data."
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+
+        max_size_bytes = self._storage_config.max_file_size_mb * MB_TO_BYTES
+        received = _ReceivedUpload()
+        collector = _FilePartCollector(received)
+        conflict_checked = False
+
+        try:
+            parser = MultipartParser(options[b"boundary"], callbacks=collector.callbacks)  # ty: ignore[invalid-argument-type]
+            async with aiofiles.open(received.open_temp_file(self._storage_directory), "wb") as f:
+                async for chunk in request.stream():
+                    parser.write(chunk)
+                    if not (data := collector.take()):
+                        continue
+                    received.size += len(data)
+                    if received.failure is None:
+                        received.failure = self._check_incoming_file(
+                            received, parent_path, max_size_bytes, check_exists=not conflict_checked
+                        )
+                        conflict_checked = True
+                    # On failure the rest of the body is still drained (but not stored) so the client receives
+                    # the error response instead of a connection reset while it is mid-upload.
+                    if received.failure is None:
+                        await f.write(data)
+                parser.finalize()
+        except MultipartParseError as e:
+            received.discard()
+            error_msg = "Malformed multipart upload."
+            logger.exception(error_msg)
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg) from e
+        except Exception as e:
+            received.discard()
+            error_msg = "Failed to receive uploaded file."
+            logger.exception(error_msg)
+            raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
+
+        if received.failure is not None:
+            received.discard()
+            raise received.failure
+        if received.filename is None:
+            received.discard()
+            error_msg = "Filename is required for file upload."
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+        return received
+
+    def _check_incoming_file(
+        self, received: _ReceivedUpload, parent_path: Path, max_size_bytes: int, *, check_exists: bool
+    ) -> HTTPException | None:
+        """Check a file that is currently being received, returning the error to raise once it has been drained.
+
+        :param _ReceivedUpload received: The upload being received
+        :param Path parent_path: Parent directory the file will be stored in
+        :param int max_size_bytes: Maximum allowed file size
+        :param bool check_exists: Whether to check if the file already exists in storage
+        :return HTTPException | None: The error to raise, or None if the file is acceptable so far
+        """
+        if received.size > max_size_bytes:
+            error_msg = f"File size exceeds maximum allowed size ({max_size_bytes} bytes)"
+            logger.error(error_msg)
+            return HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
+
+        if check_exists and (self._storage_directory / parent_path / received.safe_filename).exists():
+            error_msg = f"File already exists in storage: {parent_path / received.safe_filename}"
+            logger.error(error_msg)
+            return HTTPException(status_code=ResponseCode.CONFLICT, detail=error_msg)
+
+        return None
+
+    async def upload_file(self, request: Request, parent_directory: str) -> UploadFileResponse:
+        """Upload a file.
+
+        The request body is streamed directly to storage as it arrives (see :meth:`_receive_upload`).
+
+        :param Request request: The incoming HTTP request containing the multipart ``file`` part
         :param str parent_directory: Parent directory path relative to storage directory
         :return UploadFileResponse: File upload response
         :raises HTTPException: If file validation fails or storage operation fails
         """
-        # Validate filename. Browsers may send a relative path (e.g. "folder/sub/file.txt") as the filename
-        # for folder uploads, so only keep the final path component.
-        filename = Path((file.filename or "").replace("\\", "/")).name
-        if not filename or filename in {".", ".."}:
-            error_msg = "Filename is required for file upload."
-            logger.error(error_msg)
-            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
-
         # Guard against absolute paths and traversal outside the storage directory
         parent_path = Path(parent_directory)
         resolved_parent = (self._storage_directory / parent_path).resolve()
@@ -331,43 +478,36 @@ class FilesRouter(BaseRouter):
             logger.error(error_msg)
             raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
 
-        # Stream file to temp location while validating size
-        max_size_bytes = self._storage_config.max_file_size_mb * MB_TO_BYTES
-        chunk_size = self._storage_config.upload_chunk_size_kb * 1024
-        temp_filepath = None
+        received = await self._receive_upload(request, parent_path)
+        temp_filepath = received.temp_filepath
 
-        try:
-            temp_file = NamedTemporaryFile(delete=False, dir=self._storage_directory)
-            temp_filepath = Path(temp_file.name)
-            temp_file.close()
-
-            file_size = await self._stream_upload_to_temp(
-                file=file, temp_filepath=temp_filepath, max_size_bytes=max_size_bytes, chunk_size=chunk_size
-            )
-
-        except Exception as e:
-            self._cleanup_temp_file(temp_filepath=temp_filepath)
-            error_msg = f"Failed to read uploaded file: {filename}"
-            logger.exception(error_msg)
-            raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
+        # Browsers may send a relative path (e.g. "folder/sub/file.txt") as the filename for folder uploads,
+        # so only the final path component is kept.
+        filename = received.safe_filename
+        if not filename or filename in {".", ".."}:
+            received.discard()
+            error_msg = "Filename is required for file upload."
+            logger.error(error_msg)
+            raise HTTPException(status_code=ResponseCode.BAD_REQUEST, detail=error_msg)
 
         # Create file metadata
         file_metadata = FileMetadata(
             id=None,
             filename=filename,
             parent_directory=parent_path,
-            mime_type=file.content_type or "application/octet-stream",
-            size=file_size,
+            mime_type=received.content_type,
+            size=received.size,
         )
 
         # Ensure parent directory exists
         full_parent_dir = self._storage_directory / file_metadata.parent_directory
         full_parent_dir.mkdir(parents=True, exist_ok=True)
 
+        # Checked again as another upload may have created the file while this one was being received
         if (filepath := self._storage_directory / file_metadata.filepath).exists():
             error_msg = f"File already exists in storage: {filepath}"
             logger.error(error_msg)
-            self._cleanup_temp_file(temp_filepath=temp_filepath)
+            received.discard()
             raise HTTPException(status_code=ResponseCode.CONFLICT, detail=error_msg)
 
         # Move temp file to final location
@@ -376,7 +516,7 @@ class FilesRouter(BaseRouter):
         except OSError as e:
             error_msg = f"Failed to move file to final location: {filepath}"
             logger.exception(error_msg)
-            self._cleanup_temp_file(temp_filepath=temp_filepath)
+            received.discard()
             raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
         try:
@@ -392,7 +532,9 @@ class FilesRouter(BaseRouter):
             raise HTTPException(status_code=ResponseCode.INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
         if file_metadata.mime_type.startswith(("image/", "video/")):
-            self._thumbnail_generator.generate_thumbnail(
+            # Run in a worker thread: decoding images/videos would otherwise block every other request
+            await run_in_threadpool(
+                self._thumbnail_generator.generate_thumbnail,
                 filepath=filepath,
                 mime_type=file_metadata.mime_type,
                 file_id=created_file_metadata.id,  # ty:ignore[invalid-argument-type]
