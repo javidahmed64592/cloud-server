@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Cloud Server logo</title>
+  <desc>A blue cloud with an upload arrow on a dark tile, in the app's dark blue theme</desc>
+  <defs>
+    <linearGradient id="cloudGrad" gradientUnits="userSpaceOnUse" x1="0" y1="38" x2="0" y2="94">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#1a1a1a" stroke="#2a2a2a" stroke-width="2"/>
+  <g fill="url(#cloudGrad)">
+    <circle cx="50" cy="72" r="15"/>
+    <circle cx="68" cy="56" r="20"/>
+    <circle cx="86" cy="75" r="13"/>
+    <rect x="35" y="66" width="64" height="26" rx="13"/>
+  </g>
+  <polygon points="64,60 52,74 60,74 60,87 68,87 68,74 76,74" fill="#1a1a1a"/>
+</svg>

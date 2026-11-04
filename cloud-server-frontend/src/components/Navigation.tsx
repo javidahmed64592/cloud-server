@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -59,14 +60,13 @@ const Navigation = () => {
           {/* Logo */}
           <div className="flex items-center space-x-4">
             <Link href="/" className="flex items-center space-x-3">
-              {/* <Image
+              <Image
                 src="/logo.svg"
                 alt="Cloud Server Logo"
-                width={32}
-                height={32}
-                className="neon-glow"
+                width={36}
+                height={36}
                 priority
-              /> */}
+              />
               <div className="flex flex-col">
                 <div className="nav-logo-text text-xl font-bold text-text-primary sm:text-xl">
                   Cloud Server
