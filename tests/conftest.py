@@ -65,7 +65,6 @@ def mock_db_config_dict(mock_tmp_db_path: Path) -> dict:
 def mock_storage_config_dict() -> dict:
     """Provide a mock storage configuration dictionary."""
     return {
-        "upload_chunk_size_kb": 8,
         "max_file_size_mb": 100,
         "thumbnail_size": (10, 10),
     }
