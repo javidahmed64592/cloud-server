@@ -1,6 +1,8 @@
 interface ProgressItem {
   name: string;
   percent: number;
+  /** Shown instead of the percentage, e.g. "Finishing…" */
+  label?: string;
 }
 
 interface ProgressPanelProps {
@@ -58,7 +60,7 @@ export default function ProgressPanel({
                 <span className="truncate" title={item.name}>
                   {item.name}
                 </span>
-                <span>{item.percent}%</span>
+                <span>{item.label ?? `${item.percent}%`}</span>
               </div>
               <Bar percent={item.percent} label={item.name} small />
             </li>

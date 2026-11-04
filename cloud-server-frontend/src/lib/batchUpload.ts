@@ -34,6 +34,10 @@ export interface BatchProgress {
 }
 
 const HTTP_CONFLICT = 409;
+// The server writes the file to disk as it arrives, but only replies once it has been
+// stored and its thumbnail generated, so a file is not "complete" when its bytes are sent.
+// Hold at this fraction until the response arrives.
+export const FINISHING_FRACTION = 0.99;
 export const UPLOAD_CONCURRENCY = 4;
 
 export function computeProgress(
@@ -97,7 +101,7 @@ export async function uploadBatch(
           item.file,
           item.parentDir,
           fraction => {
-            entry.fraction = fraction;
+            entry.fraction = Math.min(fraction, FINISHING_FRACTION);
             onUpdate(entries);
           }
         );

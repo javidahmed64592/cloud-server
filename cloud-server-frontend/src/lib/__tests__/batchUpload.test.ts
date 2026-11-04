@@ -1,6 +1,7 @@
 import { uploadFile } from "@/lib/api";
 import {
   computeProgress,
+  FINISHING_FRACTION,
   uploadBatch,
   type UploadEntry,
   type UploadItem,
@@ -79,6 +80,29 @@ describe("uploadBatch", () => {
     });
 
     expect(seen).toContain(0.5);
+  });
+
+  it("holds below 100% until the server has finished with the file", async () => {
+    let release: () => void = () => undefined;
+    mockUpload.mockImplementation(async (file, _dir, onProgress) => {
+      onProgress?.(1); // every byte sent, server still saving
+      await new Promise<void>(resolve => (release = resolve));
+      return meta(file.name);
+    });
+    let entries: readonly UploadEntry[] = [];
+
+    const done = uploadBatch([item("big")], jest.fn(), e => (entries = e));
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(entries[0]!.status).toBe("uploading");
+    expect(entries[0]!.fraction).toBe(FINISHING_FRACTION);
+    expect(computeProgress(entries).percent).toBeLessThan(100);
+
+    release();
+    await done;
+
+    expect(entries[0]!.status).toBe("done");
+    expect(computeProgress(entries).percent).toBe(100);
   });
 });
 

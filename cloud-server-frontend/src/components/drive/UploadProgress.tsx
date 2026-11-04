@@ -1,5 +1,5 @@
 import ProgressPanel from "@/components/drive/ProgressPanel";
-import type { BatchProgress } from "@/lib/batchUpload";
+import { FINISHING_FRACTION, type BatchProgress } from "@/lib/batchUpload";
 
 export default function UploadProgress({
   progress,
@@ -14,6 +14,7 @@ export default function UploadProgress({
       items={progress.active.map(e => ({
         name: e.name,
         percent: Math.round(e.fraction * 100),
+        ...(e.fraction >= FINISHING_FRACTION && { label: "Finishing…" }),
       }))}
     />
   );
