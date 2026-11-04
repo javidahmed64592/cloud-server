@@ -399,7 +399,7 @@ class FilesRouter(BaseRouter):
         conflict_checked = False
 
         try:
-            parser = MultipartParser(options[b"boundary"], callbacks=collector.callbacks)
+            parser = MultipartParser(options[b"boundary"], callbacks=collector.callbacks)  # ty: ignore[invalid-argument-type]
             async with aiofiles.open(received.open_temp_file(self._storage_directory), "wb") as f:
                 async for chunk in request.stream():
                     parser.write(chunk)
